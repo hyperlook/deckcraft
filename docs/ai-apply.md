@@ -1,6 +1,6 @@
 # P1：引擎整体提交与单条历史
 
-关联：[#1](https://github.com/hyperlook/deckcraft/issues/1)、[P1 #7](https://github.com/hyperlook/deckcraft/issues/7)。设计依据：[AI 助手 RFC](rfcs/ai-assistant.md) 第 6 节。契约输入见 [P0](ai-contracts.md)。
+关联：[#1](https://github.com/hyperlook/deckcraft/issues/1)、[P1 #7](https://github.com/hyperlook/deckcraft/issues/7)。设计依据：[AI 助手 RFC](rfcs/ai-assistant.md) 第 6 节。契约输入见 `crates/engine::ai_contract`。
 
 这是引擎提交边界，不是 AI 面板、模型或请求池。没有网络、文件保存或导出。视觉验收和 PPTX 回读仍属于 P4。
 

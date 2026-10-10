@@ -1,17 +1,13 @@
-# DeckCraft — working notes for Claude
+# DeckCraft — Working Notes
 
-Read [AGENTS.md](AGENTS.md) first: its rules (asset policy, clean room, never crash) bind you and
-win over anything here.
+Refer to [AGENTS.md](AGENTS.md) for core architecture and stability guidelines.
 
-## Start every session
-1. Read `plan/STATUS.md`, then the current milestone in `plan/execution-plan.md`.
-2. Read `../../craftrules/AGENTS.md` and the standards it lists for your task.
-3. Run `cargo xtask ci` before you change anything, so you know the tree is green.
+## Development Workflow
+1. Verify workspace status with `cargo test` or `cargo clippy`.
+2. Inspect or update relevant milestone documents (e.g., `ROADMAP.md`).
 
-## Habits
-- Every user-visible action is a command with tests (`crates/engine/src/cmd/*`).
-- Look at UI changes: `deckcraft --sample --control 7990` + `ui.screenshot`, or
-  `deckcraft-cli render`.
-- Commit after each landed arc (`M<n>.<k>: what`) and push to `origin main`.
-- Keep `ROADMAP.md` and `plan/STATUS.md` current.
-- Don't ask the user questions; record genuinely-theirs decisions in `plan/STATUS.md`.
+## Core Engineering Habits
+- **Command Pattern**: Every user-visible action is implemented as an engine command with unit tests (`crates/engine/src/cmd/*`).
+- **UI Verification**: Validate UI changes using `deckcraft --sample --control 7990` + `ui.screenshot`, or render via `deckcraft-cli render`.
+- **Defensive Code**: Zero unhandled unwraps/panics in production code; handle errors cleanly with `Result` and `?`.
+- **Keep Documentation Synchronized**: Update `ROADMAP.md` when completing major capabilities.
