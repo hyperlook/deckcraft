@@ -1,5 +1,6 @@
 //! The command registry. Ids follow PowerPoint's ribbon and menu structure.
 
+pub mod ai;
 pub mod animation;
 pub mod arrange;
 pub mod design;
@@ -140,6 +141,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(review::specs());
         v.extend(inspect::specs());
         v.extend(media::specs());
+        v.extend(ai::specs());
         v
     })
 }

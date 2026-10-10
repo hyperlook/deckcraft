@@ -1,8 +1,8 @@
 //! Read-only contracts for AI edits. No Session mutation or history is performed here.
 //!
-//! A scope is frozen by the host, never granted by a provider response. P1 will maintain the
-//! independent content revision and revalidate these contracts at the atomic commit boundary.
-//! Template append has a separate host-owned resource bundle and restricted wire protocol.
+//! A scope is frozen by the host, never granted by a provider response. [`crate::Session::apply_ai`]
+//! keeps the independent content revision and revalidates these contracts before installing a
+//! candidate. Template append has a separate host-owned resource bundle and restricted wire protocol.
 
 #[path = "ai_contract_template.rs"]
 pub mod template;

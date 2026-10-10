@@ -373,7 +373,7 @@ impl AppendScope {
         graph.linked_slides.iter().map(|id| self.pages.iter().find(|p| p.source_slide_id == *id).ok_or(ContractError::ResourceGraph)).collect()
     }
 
-    /// P1 must additionally compare actual document UID/content revision before candidate work.
+    /// `Session::apply_ai` also compares the live document UID and content revision before candidate work.
     pub fn validate_target(&self, target: &Presentation) -> ContractResult<()> {
         if !target.slides.iter().map(|s| s.id).eq(self.snapshot.target_slide_ids.iter().copied()) {
             return Err(ContractError::SnapshotMismatch);
