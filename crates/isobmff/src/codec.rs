@@ -1392,10 +1392,8 @@ impl SampleEntry {
             CodecConfig::Aac(c) => {
                 b.leaf(b"esds", &esds_payload(0x40, &c.asc, c.max_bitrate, c.avg_bitrate, c.buffer_size));
             }
-            CodecConfig::Mp3 => {
-                if format == *b"mp4a" {
-                    b.leaf(b"esds", &esds_payload(0x6B, &[], 0, 0, 0));
-                }
+            CodecConfig::Mp3 if format == *b"mp4a" => {
+                b.leaf(b"esds", &esds_payload(0x6B, &[], 0, 0, 0));
             }
             CodecConfig::Alac { cookie } => {
                 let m = b.start_full(b"alac", 0, 0);
@@ -1534,6 +1532,27 @@ mod tests {
         }
         assert_eq!(roundtrip(&e, false, b"soun"), e);
         assert_eq!(roundtrip(&e, true, b"soun"), e);
+    }
+
+    #[test]
+    fn mp3_esds_only_for_mp4a() {
+        for qt in [false, true] {
+            for format in [*b"mp4a", *b".mp3"] {
+                let e = SampleEntry::audio(FourCc(format), CodecConfig::Mp3, 2, 44100.0, 16);
+                let mut b = BoxBuf::new();
+                e.write(&mut b, qt).unwrap();
+                let bx = crate::bytes::boxes(&b.buf).next().unwrap().unwrap();
+                let children: Vec<_> = crate::bytes::boxes(&bx.payload[28..]).map(Result::unwrap).collect();
+                if format == *b"mp4a" {
+                    assert_eq!(children.len(), 1);
+                    assert_eq!(children[0].kind, *b"esds");
+                    assert_eq!(parse_esds(children[0].payload).unwrap(), CodecConfig::Mp3);
+                } else {
+                    assert!(children.is_empty());
+                }
+                assert_eq!(roundtrip(&e, qt, b"soun"), e);
+            }
+        }
     }
 
     #[test]
