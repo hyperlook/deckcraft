@@ -1,0 +1,19 @@
+[package]
+name = "deckcraft-ai"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "DeckCraft AI business contracts and offline task state machine"
+
+[lints]
+workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+deckcraft-engine = { workspace = true }
+deckcraft-model = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

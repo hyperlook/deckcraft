@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "description": "Offline semantic catalog for native template samples (text and vector geometry heavy, zero external images)",
+  "license_policy": "External template assets are retained in local host path; no proprietary external assets committed to Git.",
+  "templates": [
+    {
+      "id": "garyvee_content_strategy_framework",
+      "name": "GaryVee Content Strategy Framework",
+      "category": "framework",
+      "slide_count": 17,
+      "width": 720,
+      "height": 405,
+      "source_sha256": "45a1619662039f67bd8f830f16f992ce735996a60458fb6af596703fa8c53cfa",
+      "native_sha256": "f72d5f76a8327f430d95da1638eb3217d475c2d1d1e978679e741ea96f1acc81",
+      "image_slots": 0,
+      "text_slots": 185,
+      "primary_fonts": [
+        "Arial Black",
+        "Arial"
+      ],
+      "roles": [
+        {
+          "slide_index": 0,
+          "role": "cover",
+          "description": "Title and model overview"
+        },
+        {
+          "slide_index": 1,
+          "role": "agenda",
+          "description": "Framework table of contents and structure"
+        },
+        {
+          "slide_index": 2,
+          "role": "concept",
+          "description": "Pillar content core concept"
+        },
+        {
+          "slide_index": 6,
+          "role": "process",
+          "description": "Micro-content creation workflow"
+        },
+        {
+          "slide_index": 12,
+          "role": "summary",
+          "description": "Distribution roadmap and execution takeaways"
+        }
+      ]
+    },
+    {
+      "id": "crypto_quantum_risk_briefing",
+      "name": "Crypto & Quantum Risk Briefing",
+      "category": "security-briefing",
+      "slide_count": 15,
+      "width": 960,
+      "height": 540,
+      "source_sha256": "590ca07e2ed016870ed5e44fc235ee786ccc073e7d6e2ea900c5a3cc5c469be0",
+      "native_sha256": "11fe2b1c8df04a44b96f54efdef5b4a61f676011096ace70278386dd74d8c2f3",
+      "image_slots": 0,
+      "text_slots": 225,
+      "primary_fonts": [
+        "Arial"
+      ],
+      "roles": [
+        {
+          "slide_index": 0,
+          "role": "cover",
+          "description": "Briefing title and classification header"
+        },
+        {
+          "slide_index": 1,
+          "role": "executive_summary",
+          "description": "Quantum threat timeline and executive findings"
+        },
+        {
+          "slide_index": 4,
+          "role": "threat_matrix",
+          "description": "Cryptographic vulnerability analysis grid"
+        },
+        {
+          "slide_index": 8,
+          "role": "mitigation",
+          "description": "Post-quantum cryptography transition framework"
+        },
+        {
+          "slide_index": 12,
+          "role": "recommendations",
+          "description": "Strategic recommendations and action checklist"
+        }
+      ]
+    },
+    {
+      "id": "fixed_income_macro_outlook",
+      "name": "Fixed Income Macro Outlook",
+      "category": "financial-report",
+      "slide_count": 15,
+      "width": 960,
+      "height": 540,
+      "source_sha256": "2ae8ac1cf21d2615c7ac2d352096d141bac75bbe0dd1d44370d705a246e4f7f7",
+      "native_sha256": "0728683e5f0b897786b19a992e9771f1c95429da68404c37272cca694ebced3e",
+      "image_slots": 0,
+      "text_slots": 312,
+      "primary_fonts": [
+        "Arial"
+      ],
+      "roles": [
+        {
+          "slide_index": 0,
+          "role": "cover",
+          "description": "Macroeconomic outlook report cover"
+        },
+        {
+          "slide_index": 1,
+          "role": "key_takeaways",
+          "description": "Yield curve and monetary policy executive summary"
+        },
+        {
+          "slide_index": 2,
+          "role": "indicators",
+          "description": "Multi-column economic indicators and yield analysis"
+        },
+        {
+          "slide_index": 7,
+          "role": "policy",
+          "description": "Central bank balance sheet and rate cycle analysis"
+        },
+        {
+          "slide_index": 11,
+          "role": "allocation",
+          "description": "Portfolio duration and credit spread recommendations"
+        }
+      ]
+    }
+  ]
+}

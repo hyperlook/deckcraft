@@ -114,13 +114,13 @@ fn cmd_layers() -> Result<(), String> {
 }
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates plus
-/// the egui shell.
+/// the pure AI business layer and the egui shell.
 fn wasm_set() -> Result<Vec<String>, String> {
     let crates = layers::from_metadata(&metadata()?)?;
     Ok(crates
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
-            Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
+            Some(layers::Class::Layer(l)) => l <= 5 || matches!(layers::short_name(&c.name), "ai" | "ui-egui"),
             Some(layers::Class::Standalone) => true,
             _ => false,
         })
@@ -194,4 +194,16 @@ fn cmd_ci() -> Result<(), String> {
     }
     println!("\nCI summary: all {} steps passed ({})", done.len(), done.join(", "));
     Ok(())
+}
+
+#[cfg(test)]
+mod wasm_tests {
+    #[test]
+    fn wasm_gate_includes_the_pure_ai_business_layer() {
+        let packages = super::wasm_set().unwrap();
+        for package in ["deckcraft-engine", "deckcraft-ai", "deckcraft-ui-egui"] {
+            assert!(packages.iter().any(|p| p == package), "missing {package}");
+        }
+        assert!(!packages.iter().any(|p| p == "deckcraft-mcp"));
+    }
 }

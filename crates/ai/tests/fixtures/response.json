@@ -1,0 +1,36 @@
+{
+  "snapshot": {
+    "job_id": "text-job-01",
+    "doc_uid": 17,
+    "base_content_revision": 4,
+    "target_slide_ids": [
+      101,
+      202
+    ],
+    "plan_version": 1,
+    "template_version": null
+  },
+  "operations": [
+    {
+      "op": "replace_text",
+      "target": {
+        "slide_id": 101,
+        "shape_id": 7
+      },
+      "paragraphs": [
+        "仅验证文本契约，不改文档。",
+        "预算：30 万元。"
+      ]
+    },
+    {
+      "op": "replace_text",
+      "target": {
+        "slide_id": 202,
+        "shape_id": 7
+      },
+      "paragraphs": [
+        "下一步：整体应用。"
+      ]
+    }
+  ]
+}
