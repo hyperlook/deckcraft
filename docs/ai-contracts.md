@@ -2,7 +2,7 @@
 
 关联：[#1](https://github.com/hyperlook/deckcraft/issues/1)、[P0 #3](https://github.com/hyperlook/deckcraft/issues/3)。设计依据：[AI 助手 RFC](rfcs/ai-assistant.md)。
 
-**这是只读 P0 契约，不是 AI 用户功能。** 没有注册 `ai.applyPatch`，没有模型/网络/运行时或 UI，没有修改 `DocState`、历史或选区。模板追加契约已有真实内存资源包与完整局部映射；3 套本地样本记录已在 `docs/ai-samples.md` 与 `samples-catalog.json` 规范化。P1 之前不能把这些类型当作已实现的提交事务。
+**这是只读 P0 契约，不是 AI 用户功能。** 本文件不安装补丁、不改历史。提交事务在 [P1 原子应用](ai-apply.md)。模板追加契约已有真实内存资源包与完整局部映射；3 套本地样本记录已在 `docs/ai-samples.md` 与 `samples-catalog.json` 规范化。
 
 ## 模块边界
 
@@ -52,7 +52,7 @@ Schema 每层拒绝未知字段，未知操作拒绝；无效/零 ID、重复或
 
 `decode_bounded` 在 serde 分配前检查字节数，保留 serde 递归深度限制；解析后以及进程内直接构造的类型均需语义校验。宿主还必须在接收网络正文时限制流式读取大小，不能先无限缓冲再调用解码器。已有文档源字段也有 run 数和文字字节上限。
 
-本阶段只验证传入的身份与快照，不从 `DocState::revision` 生成内容身份。P1 必须维护独立内容版本，提交时比较真实文档 UID/内容版本，并再次执行校验；选区变化不能造成冲突，真实修改和 Undo/Redo 必须造成冲突。
+本阶段只验证传入的身份与快照，不从 `DocState::revision` 生成内容身份。提交边界的独立内容版本、选区不冲突、真实修改和 Undo/Redo 冲突见 [P1](ai-apply.md)。
 
 ## 模板追加：provider 配方与宿主完整草稿是两层协议
 
@@ -87,7 +87,7 @@ Schema 每层拒绝未知字段，未知操作拒绝；无效/零 ID、重复或
 空文档用 `[]`。非空目标还须匹配画布、默认文字样式与页脚设置，拒绝静默全局改样式。
 空目标可以采用包的画布/默认样式/页脚设置，已有母版不能成为默认回退。
 `TextScope`、`Task::text_edit` 仍拒绝空目标；`Task::outline_generation` 允许空目标。
-这些检查不是实际 doc UID/content revision 校验；P1 仍须在提交边界比较真实内容身份。
+这些检查不是实际 doc UID/content revision 校验；提交边界的比较见 [P1](ai-apply.md)。
 
 ### 唯一允许的 provider 响应
 
@@ -131,7 +131,7 @@ local 绑定及重复 local ID 均拒绝。local 分配是 checked arithmetic，
 不猜测链接目的地。固定 HTTPS URL 随宿主资源复制，provider 不能创建或改写 URL；程序、文件、
 相对导航、自定义播放等 action 暂不支持，凭据/控制字符 URL 拒绝。
 
-P1 消费完整 draft 时须重检身份、目标与 `draft.validate()`；在独立候选中为**所有** local resource
+提交时重检身份、目标与 `draft.validate()`；在独立候选中为**所有** local resource
 分配 fresh destination ID，按完整 mapping 复制/裁剪母版布局、主题、媒体与形状，再按实例的明确
 PageLink 重写所有 shape/run/list style 页链接。所需资源已在内存，不得安装后临时读文件/网络补足。
 空目标的全局设置须在候选内准备；非空目标不改旧页/全局样式。只在全部复制、资源和验证成功后整体安装。
@@ -194,6 +194,6 @@ cargo xtask layers
 
 没有可截图的 UI 或实际安装/渲染后的修改结果，视觉验收不适用于这个只读契约组件；没有将进程退出成功当作图片检查。`cargo xtask wasm` 已把 AI 纯业务 crate 纳入检查集合，组件使用 `cargo xtask ci` 运行工作区门禁及实际 WASM；合并后的 P0 feature head 仍须重新独立验收。模板视觉/PPTX 回读属于 P4，不以局部测试替代。
 
-P0 阶段已包含 3 套本地模板样本规范（`docs/ai-samples.md`）及离线元数据夹具（`samples-catalog.json`）；未确认许可的外部原模板库未直接提交到仓库。P0 全部契约与夹具已闭环。P1 的原子提交、P4 的实际填槽/渲染/PPTX 回读尚未实现，离线契约通过不等于真实模板视觉验收。
+P0 阶段已包含 3 套本地模板样本规范（`docs/ai-samples.md`）及离线元数据夹具（`samples-catalog.json`）；未确认许可的外部原模板库未直接提交到仓库。P0 全部契约与夹具已闭环。原子安装见 [P1](ai-apply.md)。P4 的实际填槽/渲染/PPTX 回读尚未实现，离线契约通过不等于真实模板视觉验收。
 
 **关键决策**：将授权和提交白名单留在引擎边界，避免 provider 扩权；使用显式段落替换并保持数量，避免首版文本精简先损坏格式，再由历史/预览补救。

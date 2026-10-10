@@ -7,6 +7,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+pub mod ai_apply;
 pub mod ai_contract;
 pub mod cmd;
 pub mod connect;
@@ -138,8 +139,14 @@ pub struct DocState {
     pub history: History,
     pub path: Option<String>,
     pub revision: u64,
+    /// Content identity. Starts at 1 and only moves forward. Real edits, undo, and redo advance
+    /// it; selection changes and save marks do not. Undo does not restore an older number, so a
+    /// task snapshotted before the undo stays conflicted.
+    pub content_revision: u64,
     pub saved_doc: Arc<Presentation>,
     pub interaction: Option<Interaction>,
+    /// Successful AI commits for this document session. Not part of undo state.
+    pub(crate) applied_jobs: ai_apply::AppliedJobs,
     pub uid: u64,
     pub title: String,
 }
@@ -156,7 +163,9 @@ impl DocState {
             history: History { limit: 500, ..Default::default() },
             path,
             revision: 1,
+            content_revision: 1,
             interaction: None,
+            applied_jobs: ai_apply::AppliedJobs::default(),
             uid: NEXT_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             title,
         }
@@ -367,6 +376,12 @@ impl Session {
     pub fn doc_mut(&mut self) -> Result<&mut DocState> {
         self.active_mut().ok_or(EngineError::NoDocument)
     }
+    pub(crate) fn doc_index_by_uid(&self, uid: u64) -> Option<usize> {
+        self.docs.iter().position(|doc| doc.uid == uid)
+    }
+    pub(crate) fn doc_at_mut(&mut self, index: usize) -> Option<&mut DocState> {
+        self.docs.get_mut(index)
+    }
     pub fn set_active(&mut self, i: usize) {
         if i < self.docs.len() {
             self.active = Some(i);
@@ -445,7 +460,9 @@ impl Session {
         connect::reroute(&mut doc, &sel);
         st.doc = Arc::new(doc);
         st.selection = sel;
-        st.revision += 1;
+        st.revision = st.revision.saturating_add(1);
+        // `edit` is the content-mutation path. Selection-only changes go through `select`.
+        bump_content_revision(st);
         Ok(r)
     }
 
@@ -461,7 +478,7 @@ impl Session {
 }
 
 /// Keep the selection pointing at things that exist.
-fn clamp_selection(st: &mut DocState) {
+pub(crate) fn clamp_selection(st: &mut DocState) {
     let n = st.doc.slides.len();
     if n == 0 {
         st.selection.slide = 0;
@@ -485,6 +502,10 @@ fn clamp_selection(st: &mut DocState) {
         }
         _ => {}
     }
+}
+
+pub(crate) fn bump_content_revision(st: &mut DocState) {
+    st.content_revision = st.content_revision.saturating_add(1);
 }
 
 pub(crate) fn push_undo(st: &mut DocState, e: HistoryEntry) {

@@ -115,6 +115,7 @@ pub fn fit_text_box(s: &mut Session, id: ShapeId) -> Result<()> {
     }
     st.doc = Arc::new(d);
     st.revision += 1;
+    crate::bump_content_revision(st);
     Ok(())
 }
 
@@ -298,6 +299,7 @@ fn autocorrect(s: &mut Session) -> Result<()> {
         ed::insert(b, (t.caret.0, start), &rep, None);
     }
     st.doc = Arc::new(d);
+    crate::bump_content_revision(st);
     let c = (t.caret.0, (end as isize + delta).max(0) as usize);
     if let Some(tt) = st.selection.text.as_mut() {
         tt.caret = c;
