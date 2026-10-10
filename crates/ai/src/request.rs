@@ -60,28 +60,8 @@ impl TextRequest {
         if self.inputs.len() != self.scope.editable.len() {
             return Err(ContractError::UnauthorizedTarget);
         }
-        if self.intent.instruction.trim().is_empty() {
-            return Err(ContractError::Identity("instruction"));
-        }
-        if self.intent.confirmed_facts.len() > MAX_FACTS || self.intent.forbidden_changes.len() > MAX_CONSTRAINTS {
-            return Err(ContractError::Limit("intent entries"));
-        }
         let mut total = 0usize;
-        for text in [&self.intent.instruction, &self.intent.audience, &self.intent.goal, &self.intent.narrative_summary] {
-            add_text(text, MAX_CONTEXT_CHARS, &mut total)?;
-        }
-        for fact in &self.intent.confirmed_facts {
-            if fact.text.trim().is_empty() {
-                return Err(ContractError::Identity("fact"));
-            }
-            add_text(&fact.text, MAX_CONTEXT_CHARS, &mut total)?;
-            if let Some(source) = &fact.source {
-                add_text(source, MAX_CONTEXT_CHARS, &mut total)?;
-            }
-        }
-        for text in &self.intent.forbidden_changes {
-            add_text(text, MAX_CONTEXT_CHARS, &mut total)?;
-        }
+        self.intent.validate_with_total(&mut total)?;
         let mut seen = std::collections::BTreeSet::new();
         for input in &self.inputs {
             if !self.scope.editable.contains(&input.target) || !seen.insert(input.target) {
@@ -114,7 +94,34 @@ impl TextRequest {
     }
 }
 
-fn add_text(text: &str, max_chars: usize, total: &mut usize) -> ContractResult<()> {
+impl TextIntent {
+    pub(crate) fn validate_with_total(&self, total: &mut usize) -> ContractResult<()> {
+        if self.instruction.trim().is_empty() {
+            return Err(ContractError::Identity("instruction"));
+        }
+        if self.confirmed_facts.len() > MAX_FACTS || self.forbidden_changes.len() > MAX_CONSTRAINTS {
+            return Err(ContractError::Limit("intent entries"));
+        }
+        for text in [&self.instruction, &self.audience, &self.goal, &self.narrative_summary] {
+            add_text(text, MAX_CONTEXT_CHARS, total)?;
+        }
+        for fact in &self.confirmed_facts {
+            if fact.text.trim().is_empty() {
+                return Err(ContractError::Identity("fact"));
+            }
+            add_text(&fact.text, MAX_CONTEXT_CHARS, total)?;
+            if let Some(source) = &fact.source {
+                add_text(source, MAX_CONTEXT_CHARS, total)?;
+            }
+        }
+        for text in &self.forbidden_changes {
+            add_text(text, MAX_CONTEXT_CHARS, total)?;
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn add_text(text: &str, max_chars: usize, total: &mut usize) -> ContractResult<()> {
     if text.len() > MAX_TOTAL_TEXT_BYTES || text.chars().count() > max_chars {
         return Err(ContractError::Limit("request text"));
     }

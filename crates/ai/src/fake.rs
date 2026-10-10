@@ -7,6 +7,8 @@ use deckcraft_engine::ai_contract::{ContractError, MAX_WIRE_BYTES, TextPatch};
 use deckcraft_model::Presentation;
 
 use crate::request::TextRequest;
+use crate::template::TemplateRequest;
+use deckcraft_engine::ai_contract::template::{AppendDraft, AppendResponse, AppendScope};
 
 pub const MAX_SCRIPT_REPLIES: usize = 64;
 
@@ -43,6 +45,14 @@ impl FakeProvider {
 
     pub fn remaining(&self) -> usize {
         self.replies.len()
+    }
+
+    pub fn respond_template(&mut self, request: &TemplateRequest, scope: &AppendScope) -> Result<AppendDraft, FakeError> {
+        request.validate(scope)?;
+        match self.replies.pop_front().ok_or(FakeError::Exhausted)? {
+            FakeReply::Json(bytes) => Ok(AppendDraft::bind(scope.clone(), AppendResponse::decode(&bytes, scope)?)?),
+            FakeReply::ProviderFailure => Err(FakeError::ProviderFailure),
+        }
     }
 
     pub fn respond(&mut self, request: &TextRequest, doc: &Presentation) -> Result<TextPatch, FakeError> {

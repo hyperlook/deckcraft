@@ -94,7 +94,8 @@ impl Task {
     }
 
     pub fn outline_generation(snapshot: SnapshotIdentity) -> Result<Self, TaskError> {
-        Self::new(snapshot, TaskState::Planning)
+        snapshot.validate_for_append()?;
+        Ok(Self { snapshot, state: TaskState::Planning, failure: None })
     }
 
     fn new(snapshot: SnapshotIdentity, state: TaskState) -> Result<Self, TaskError> {

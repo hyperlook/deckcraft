@@ -2,7 +2,10 @@
 //!
 //! A scope is frozen by the host, never granted by a provider response. P1 will maintain the
 //! independent content revision and revalidate these contracts at the atomic commit boundary.
-//! Template-page/resource bundles are deliberately not accepted by this text-only slice.
+//! Template append has a separate host-owned resource bundle and restricted wire protocol.
+
+#[path = "ai_contract_template.rs"]
+pub mod template;
 
 use std::collections::BTreeSet;
 
@@ -43,6 +46,10 @@ pub enum ContractError {
     ParagraphStructure,
     #[error("paragraph contains control characters")]
     ControlCharacter,
+    #[error("invalid template resource graph or local mapping")]
+    ResourceGraph,
+    #[error("unsupported template content")]
+    UnsupportedTemplate,
 }
 
 pub type ContractResult<T> = std::result::Result<T, ContractError>;
@@ -76,11 +83,20 @@ pub struct SnapshotIdentity {
 
 impl SnapshotIdentity {
     pub fn validate(&self) -> ContractResult<()> {
+        self.validate_for_append()?;
+        if self.target_slide_ids.is_empty() {
+            return Err(ContractError::Limit("target slides"));
+        }
+        Ok(())
+    }
+
+    /// Empty targets are valid only for append/generation, never for text edit authorization.
+    pub fn validate_for_append(&self) -> ContractResult<()> {
         validate_key(&self.job_id)?;
         if self.doc_uid == 0 || self.base_content_revision == 0 || self.plan_version == 0 || self.template_version == Some(0) {
             return Err(ContractError::Identity("version or document"));
         }
-        if self.target_slide_ids.is_empty() || self.target_slide_ids.len() > MAX_TARGET_SLIDES {
+        if self.target_slide_ids.len() > MAX_TARGET_SLIDES {
             return Err(ContractError::Limit("target slides"));
         }
         let mut seen = BTreeSet::new();
