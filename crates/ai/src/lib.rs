@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 pub mod request;
+pub mod sample;
 pub mod task;
 pub mod template;
 

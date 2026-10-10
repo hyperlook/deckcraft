@@ -2,7 +2,7 @@
 
 关联：[#1](https://github.com/hyperlook/deckcraft/issues/1)、[P0 #3](https://github.com/hyperlook/deckcraft/issues/3)。设计依据：[AI 助手 RFC](rfcs/ai-assistant.md)。
 
-**这是只读 P0 契约，不是 AI 用户功能。** 没有注册 `ai.applyPatch`，没有模型/网络/运行时或 UI，没有修改 `DocState`、历史或选区。模板追加契约已有真实内存资源包与完整局部映射；2–3 套本地样本记录由独立样本组件交付。P1 之前不能把这些类型当作已实现的提交事务。
+**这是只读 P0 契约，不是 AI 用户功能。** 没有注册 `ai.applyPatch`，没有模型/网络/运行时或 UI，没有修改 `DocState`、历史或选区。模板追加契约已有真实内存资源包与完整局部映射；3 套本地样本记录已在 `docs/ai-samples.md` 与 `samples-catalog.json` 规范化。P1 之前不能把这些类型当作已实现的提交事务。
 
 ## 模块边界
 
@@ -194,6 +194,6 @@ cargo xtask layers
 
 没有可截图的 UI 或实际安装/渲染后的修改结果，视觉验收不适用于这个只读契约组件；没有将进程退出成功当作图片检查。`cargo xtask wasm` 已把 AI 纯业务 crate 纳入检查集合，组件使用 `cargo xtask ci` 运行工作区门禁及实际 WASM；合并后的 P0 feature head 仍须重新独立验收。模板视觉/PPTX 回读属于 P4，不以局部测试替代。
 
-P0 阶段仍须整合独立样本组件的 2–3 套本地模板记录并独立审查整体 feature head。不得把未确认许可的本地模板库直接提交到仓库。P1 的原子提交、P4 的实际填槽/渲染/PPTX 回读尚未实现，离线契约通过不等于真实模板视觉验收。
+P0 阶段已包含 3 套本地模板样本规范（`docs/ai-samples.md`）及离线元数据夹具（`samples-catalog.json`）；未确认许可的外部原模板库未直接提交到仓库。P0 全部契约与夹具已闭环。P1 的原子提交、P4 的实际填槽/渲染/PPTX 回读尚未实现，离线契约通过不等于真实模板视觉验收。
 
 **关键决策**：将授权和提交白名单留在引擎边界，避免 provider 扩权；使用显式段落替换并保持数量，避免首版文本精简先损坏格式，再由历史/预览补救。
