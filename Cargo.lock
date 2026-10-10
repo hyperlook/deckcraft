@@ -895,6 +895,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "deckcraft-ai"
+version = "0.4.0"
+dependencies = [
+ "deckcraft-engine",
+ "deckcraft-model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "deckcraft-anim"
 version = "0.4.0"
 dependencies = [

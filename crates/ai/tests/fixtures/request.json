@@ -1,0 +1,63 @@
+{
+  "scope": {
+    "snapshot": {
+      "job_id": "text-job-01",
+      "doc_uid": 17,
+      "base_content_revision": 4,
+      "target_slide_ids": [
+        101,
+        202
+      ],
+      "plan_version": 1,
+      "template_version": null
+    },
+    "editable": [
+      {
+        "slide_id": 101,
+        "shape_id": 7
+      },
+      {
+        "slide_id": 202,
+        "shape_id": 7
+      }
+    ]
+  },
+  "intent": {
+    "instruction": "精简要点，保留预算。",
+    "audience": "项目团队",
+    "goal": "确认本轮验证范围",
+    "narrative_summary": "先离线契约，再整体应用。",
+    "confirmed_facts": [
+      {
+        "text": "预算为 30 万元。",
+        "source": "用户材料"
+      }
+    ],
+    "forbidden_changes": [
+      "不得修改预算数字。"
+    ]
+  },
+  "inputs": [
+    {
+      "target": {
+        "slide_id": 101,
+        "shape_id": 7
+      },
+      "responsibility": "说明验证范围和预算",
+      "paragraphs": [
+        "本轮只验证文本契约，不改真实文档。",
+        "关键事实：预算为 30 万元。"
+      ]
+    },
+    {
+      "target": {
+        "slide_id": 202,
+        "shape_id": 7
+      },
+      "responsibility": "说明下一阶段",
+      "paragraphs": [
+        "下一步验证整体应用。"
+      ]
+    }
+  ]
+}

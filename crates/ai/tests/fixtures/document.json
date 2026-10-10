@@ -1,0 +1,88 @@
+{
+  "slides": [
+    {
+      "id": 101,
+      "name": "要点",
+      "shapes": [
+        {
+          "id": 7,
+          "name": "要点正文",
+          "text": {
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "本轮只验证文本契约，不改真实文档。"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "关键事实：预算为 30 万元。"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": 8,
+          "name": "未授权正文",
+          "text": {
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "PRIVATE_UNSELECTED_TEXT"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 202,
+      "name": "结论",
+      "shapes": [
+        {
+          "id": 7,
+          "name": "标题",
+          "text": {
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "下一步验证整体应用。"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 303,
+      "name": "未选择页",
+      "shapes": [
+        {
+          "id": 7,
+          "text": {
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "PRIVATE_UNSELECTED_SLIDE"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
