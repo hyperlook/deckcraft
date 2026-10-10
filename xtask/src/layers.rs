@@ -182,11 +182,10 @@ pub fn check(crates: &[Crate]) -> Vec<Violation> {
                 match classify(&d.name) {
                     // Unregistered deps are reported on their own entry.
                     None => {}
-                    Some(Class::Testkit) => {
-                        if d.kind != DepKind::Dev {
-                            out.push(Violation::TestkitAsNormalDep { krate: c.name.clone() });
-                        }
+                    Some(Class::Testkit) if d.kind != DepKind::Dev => {
+                        out.push(Violation::TestkitAsNormalDep { krate: c.name.clone() });
                     }
+                    Some(Class::Testkit) => {}
                     Some(dc) => {
                         let to = dc.layer().unwrap_or(u8::MAX);
                         let dev_ok = d.kind == DepKind::Dev && DEV_EXCEPTIONS.contains(&(short_name(&c.name), short_name(&d.name)));
@@ -314,8 +313,10 @@ mod tests {
 
     #[test]
     fn testkit_only_as_dev_dependency() {
-        let v = check(&[c("deckcraft-render", &[("deckcraft-testkit", Normal, true)])]);
-        assert!(matches!(v[..], [Violation::TestkitAsNormalDep { .. }]));
+        for kind in [Normal, Build] {
+            let v = check(&[c("deckcraft-render", &[("deckcraft-testkit", kind, true)])]);
+            assert_eq!(v, vec![Violation::TestkitAsNormalDep { krate: "deckcraft-render".into() }]);
+        }
         assert!(check(&[c("deckcraft-render", &[("deckcraft-testkit", Dev, true)])]).is_empty());
         // testkit itself may use anything up to L5 but not L6 crates.
         assert!(check(&[c("deckcraft-testkit", &[("deckcraft-engine", Normal, true)])]).is_empty());
