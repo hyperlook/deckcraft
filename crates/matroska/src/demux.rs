@@ -713,10 +713,8 @@ impl Walker<'_> {
         match h.id {
             SEEK_HEAD => file.seek_head.extend(parse_seekhead(&data)),
             INFO => file.info = parse_info(&data),
-            TRACKS => {
-                if file.tracks.is_empty() {
-                    file.tracks = parse_tracks(&data, file.info.timestamp_scale);
-                }
+            TRACKS if file.tracks.is_empty() => {
+                file.tracks = parse_tracks(&data, file.info.timestamp_scale);
             }
             CUES => parse_cues(&data, &mut file.cues),
             CHAPTERS => parse_chapters(&data, &mut file.chapters),
@@ -1163,5 +1161,35 @@ impl<S: ByteSource> Iterator for Demuxer<S> {
                 Some(Err(e))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mux::{el, el_str, el_uint};
+
+    #[test]
+    fn level1_tracks_keeps_first_nonempty_table() {
+        let mut bytes = Vec::new();
+        let mut header = Vec::new();
+        el_str(&mut header, DOC_TYPE, "matroska");
+        el(&mut bytes, EBML, &header);
+        let mut segment = Vec::new();
+        el(&mut segment, TRACKS, &[]);
+        for number in [1, 2] {
+            let mut track = Vec::new();
+            el_uint(&mut track, TRACK_NUMBER, number);
+            el_uint(&mut track, TRACK_TYPE, 2);
+            el_str(&mut track, CODEC_ID, "A_MPEG/L3");
+            let mut tracks = Vec::new();
+            el(&mut tracks, TRACK_ENTRY, &track);
+            el(&mut segment, TRACKS, &tracks);
+        }
+        el(&mut bytes, SEGMENT, &segment);
+        let file = open(&bytes[..]).unwrap();
+        assert_eq!(file.tracks.len(), 1);
+        assert_eq!(file.tracks[0].number, 1);
+        assert!(file.warnings.is_empty(), "{:?}", file.warnings);
     }
 }
