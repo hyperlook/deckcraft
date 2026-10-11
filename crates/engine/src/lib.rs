@@ -139,14 +139,8 @@ pub struct DocState {
     pub history: History,
     pub path: Option<String>,
     pub revision: u64,
-    /// Content identity. Starts at 1 and only moves forward. Real edits, undo, and redo advance
-    /// it; selection changes and save marks do not. Undo does not restore an older number, so a
-    /// task snapshotted before the undo stays conflicted.
-    pub content_revision: u64,
     pub saved_doc: Arc<Presentation>,
     pub interaction: Option<Interaction>,
-    /// Successful AI commits for this document session. Not part of undo state.
-    pub(crate) applied_jobs: ai_apply::AppliedJobs,
     pub uid: u64,
     pub title: String,
 }
@@ -163,9 +157,7 @@ impl DocState {
             history: History { limit: 500, ..Default::default() },
             path,
             revision: 1,
-            content_revision: 1,
             interaction: None,
-            applied_jobs: ai_apply::AppliedJobs::default(),
             uid: NEXT_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             title,
         }
@@ -461,8 +453,6 @@ impl Session {
         st.doc = Arc::new(doc);
         st.selection = sel;
         st.revision = st.revision.saturating_add(1);
-        // `edit` is the content-mutation path. Selection-only changes go through `select`.
-        bump_content_revision(st);
         Ok(r)
     }
 
@@ -502,10 +492,6 @@ pub(crate) fn clamp_selection(st: &mut DocState) {
         }
         _ => {}
     }
-}
-
-pub(crate) fn bump_content_revision(st: &mut DocState) {
-    st.content_revision = st.content_revision.saturating_add(1);
 }
 
 pub(crate) fn push_undo(st: &mut DocState, e: HistoryEntry) {

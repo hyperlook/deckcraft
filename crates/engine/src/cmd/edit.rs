@@ -33,9 +33,6 @@ fn restore(s: &mut Session, redo: bool) -> Result<Value> {
     st.selection = e.selection;
     st.interaction = None;
     st.revision += 1;
-    // Undo and redo change content identity even when they restore an older document. The number
-    // never moves backward, so a snapshot taken before this step stays conflicted.
-    crate::bump_content_revision(st);
     Ok(json!({"label": e.label}))
 }
 

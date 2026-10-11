@@ -1,258 +1,139 @@
-//! Read-only contracts for AI edits. No Session mutation or history is performed here.
+//! One AI round: the agreed outline, the page the user cited, their comment, and the materials.
 //!
-//! A scope is frozen by the host, never granted by a provider response. [`crate::Session::apply_ai`]
-//! keeps the independent content revision and revalidates these contracts before installing a
-//! candidate. Template append has a separate host-owned resource bundle and restricted wire protocol.
+//! Nothing here writes the deck. Accepting a proposal is [`crate::ai_apply`]. The old text-box
+//! patch, paragraph-count lock, content-revision conflict, and template-append protocol are gone.
 
-#[path = "ai_contract_template.rs"]
-pub mod template;
+use deckcraft_model::{Material, Outline, OutlinePage, SlideId};
+use serde::{Deserialize, Serialize};
 
-use std::collections::BTreeSet;
-
-use deckcraft_model::text::RunKind;
-use deckcraft_model::{Presentation, ShapeId, ShapeKind, SlideId};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-
-pub const MAX_WIRE_BYTES: usize = 256 * 1024;
-pub const MAX_TARGET_SLIDES: usize = 64;
-pub const MAX_TEXT_TARGETS: usize = 256;
-pub const MAX_PATCH_OPS: usize = 256;
-pub const MAX_PARAGRAPHS: usize = 128;
-pub const MAX_RUNS_PER_PARAGRAPH: usize = 128;
-pub const MAX_TEXT_CHARS: usize = 16_384;
-pub const MAX_TOTAL_TEXT_BYTES: usize = 128 * 1024;
+pub const MAX_OUTLINE_PAGES: usize = 64;
+pub const MAX_POINTS: usize = 32;
+pub const MAX_TITLE_CHARS: usize = 500;
+pub const MAX_POINT_CHARS: usize = 2_000;
+pub const MAX_COMMENT_CHARS: usize = 8_000;
+pub const MAX_MATERIALS: usize = 32;
+pub const MAX_MATERIAL_NAME_CHARS: usize = 200;
+pub const MAX_MATERIAL_BODY_CHARS: usize = 32_000;
+pub const MAX_LABEL_CHARS: usize = 256;
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ContractError {
-    #[error("invalid JSON schema")]
+    #[error("invalid text")]
     Schema,
     #[error("limit exceeded: {0}")]
     Limit(&'static str),
-    #[error("invalid identity: {0}")]
-    Identity(&'static str),
-    #[error("duplicate target")]
-    DuplicateTarget,
-    #[error("response does not match the frozen snapshot")]
-    SnapshotMismatch,
-    #[error("target is outside the frozen scope")]
-    UnauthorizedTarget,
-    #[error("unknown slide {0}")]
-    UnknownSlide(SlideId),
-    #[error("unknown shape {0:?}")]
-    UnknownShape(TextTarget),
-    #[error("text target is unsupported: {0:?}")]
-    UnsupportedText(TextTarget),
-    #[error("paragraph structure must be preserved")]
-    ParagraphStructure,
-    #[error("paragraph contains control characters")]
-    ControlCharacter,
-    #[error("invalid template resource graph or local mapping")]
-    ResourceGraph,
-    #[error("unsupported template content")]
-    UnsupportedTemplate,
+    #[error("duplicate outline page")]
+    DuplicatePage,
+    #[error("duplicate material name")]
+    DuplicateMaterial,
 }
 
-pub type ContractResult<T> = std::result::Result<T, ContractError>;
+pub type ContractResult<T> = Result<T, ContractError>;
 
-/// Check byte size *before* serde can allocate strings/vectors. Serde's recursion limit remains
-/// enabled. Callers must also cap the transport body while reading it, not only after buffering.
-pub fn decode_bounded<T: DeserializeOwned>(bytes: &[u8]) -> ContractResult<T> {
-    if bytes.len() > MAX_WIRE_BYTES {
-        return Err(ContractError::Limit("wire bytes"));
+/// A proposal for the cited page. The number of points is whatever the new page needs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageProposal {
+    pub doc_uid: u64,
+    pub page_id: SlideId,
+    pub title: String,
+    pub points: Vec<String>,
+    /// Empty means the engine names the undo step from the title.
+    #[serde(default)]
+    pub label: String,
+}
+
+impl PageProposal {
+    pub fn validate(&self) -> ContractResult<()> {
+        if self.doc_uid == 0 || self.page_id.0 == 0 {
+            return Err(ContractError::Schema);
+        }
+        plain_line(&self.title, MAX_TITLE_CHARS, "title")?;
+        if self.points.len() > MAX_POINTS {
+            return Err(ContractError::Limit("points"));
+        }
+        for point in &self.points {
+            plain_line(point, MAX_POINT_CHARS, "point")?;
+        }
+        if self.label.chars().count() > MAX_LABEL_CHARS || self.label.chars().any(char::is_control) {
+            return Err(ContractError::Schema);
+        }
+        Ok(())
     }
-    serde_json::from_slice(bytes).map_err(|_| ContractError::Schema)
 }
 
-pub fn validate_key(key: &str) -> ContractResult<()> {
-    if key.is_empty() || key.len() > 64 || !key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
-        return Err(ContractError::Identity("key"));
+pub fn validate_comment(comment: &str) -> ContractResult<()> {
+    if comment.chars().count() > MAX_COMMENT_CHARS || has_disallowed_control(comment) {
+        return Err(ContractError::Schema);
     }
     Ok(())
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SnapshotIdentity {
-    pub job_id: String,
-    pub doc_uid: u64,
-    pub base_content_revision: u64,
-    pub target_slide_ids: Vec<SlideId>,
-    pub plan_version: u64,
-    pub template_version: Option<u64>,
-}
-
-impl SnapshotIdentity {
-    pub fn validate(&self) -> ContractResult<()> {
-        self.validate_for_append()?;
-        if self.target_slide_ids.is_empty() {
-            return Err(ContractError::Limit("target slides"));
-        }
-        Ok(())
+pub fn validate_outline(outline: &Outline) -> ContractResult<()> {
+    if outline.pages.len() > MAX_OUTLINE_PAGES {
+        return Err(ContractError::Limit("outline pages"));
     }
-
-    /// Empty targets are valid only for append/generation, never for text edit authorization.
-    pub fn validate_for_append(&self) -> ContractResult<()> {
-        validate_key(&self.job_id)?;
-        if self.doc_uid == 0 || self.base_content_revision == 0 || self.plan_version == 0 || self.template_version == Some(0) {
-            return Err(ContractError::Identity("version or document"));
-        }
-        if self.target_slide_ids.len() > MAX_TARGET_SLIDES {
-            return Err(ContractError::Limit("target slides"));
-        }
-        let mut seen = BTreeSet::new();
-        for id in &self.target_slide_ids {
-            if id.0 == 0 {
-                return Err(ContractError::Identity("slide"));
+    let mut seen = Vec::new();
+    for page in &outline.pages {
+        validate_outline_page(page)?;
+        if let Some(id) = page.page_id {
+            if seen.contains(&id) {
+                return Err(ContractError::DuplicatePage);
             }
-            if !seen.insert(*id) {
-                return Err(ContractError::DuplicateTarget);
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TextTarget {
-    pub slide_id: SlideId,
-    pub shape_id: ShapeId,
-}
-
-/// Host-owned authorization, separate from the returned patch. Selecting a slide does not
-/// authorize every shape on it. The host lists only user-approved, safely replaceable fields.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TextScope {
-    pub snapshot: SnapshotIdentity,
-    pub editable: Vec<TextTarget>,
-}
-
-impl TextScope {
-    pub fn validate(&self, doc: &Presentation) -> ContractResult<()> {
-        self.snapshot.validate()?;
-        if self.editable.is_empty() || self.editable.len() > MAX_TEXT_TARGETS {
-            return Err(ContractError::Limit("text targets"));
-        }
-        for id in &self.snapshot.target_slide_ids {
-            let mut matches = doc.slides.iter().filter(|s| s.id == *id);
-            if matches.next().is_none() {
-                return Err(ContractError::UnknownSlide(*id));
-            }
-            if matches.next().is_some() {
-                return Err(ContractError::DuplicateTarget);
-            }
-        }
-        let mut seen = BTreeSet::new();
-        for target in &self.editable {
-            if target.shape_id.0 == 0 {
-                return Err(ContractError::Identity("shape"));
-            }
-            if !self.snapshot.target_slide_ids.contains(&target.slide_id) {
-                return Err(ContractError::UnauthorizedTarget);
-            }
-            if !seen.insert(*target) {
-                return Err(ContractError::DuplicateTarget);
-            }
-            safe_paragraph_count(doc, *target)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
-pub enum TextPatchOp {
-    /// Plain paragraph strings, not Markdown or rich text. Preserve paragraph count and each
-    /// paragraph's existing formatting; P1 must not implement this by calling lossy `text.set`.
-    ReplaceText { target: TextTarget, paragraphs: Vec<String> },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TextPatch {
-    pub snapshot: SnapshotIdentity,
-    pub operations: Vec<TextPatchOp>,
-}
-
-impl TextPatch {
-    pub fn decode(bytes: &[u8], scope: &TextScope, doc: &Presentation) -> ContractResult<Self> {
-        let patch: Self = decode_bounded(bytes)?;
-        patch.validate(scope, doc)?;
-        Ok(patch)
-    }
-
-    /// Pure validation, usable again at the engine boundary even for in-process typed input.
-    /// This does NOT check a live document revision: the host supplies the frozen scope and P1
-    /// must compare its identity with the live DocState before preparing any candidate.
-    pub fn validate(&self, scope: &TextScope, doc: &Presentation) -> ContractResult<()> {
-        scope.validate(doc)?;
-        self.snapshot.validate()?;
-        if self.snapshot != scope.snapshot {
-            return Err(ContractError::SnapshotMismatch);
-        }
-        if self.operations.len() > MAX_PATCH_OPS {
-            return Err(ContractError::Limit("patch operations"));
-        }
-        let mut seen = BTreeSet::new();
-        let mut total_bytes = 0usize;
-        for TextPatchOp::ReplaceText { target, paragraphs } in &self.operations {
-            if !scope.editable.contains(target) {
-                return Err(ContractError::UnauthorizedTarget);
-            }
-            if !seen.insert(*target) {
-                return Err(ContractError::DuplicateTarget);
-            }
-            if paragraphs.len() != safe_paragraph_count(doc, *target)? {
-                return Err(ContractError::ParagraphStructure);
-            }
-            let mut chars = 0usize;
-            for paragraph in paragraphs {
-                total_bytes = total_bytes.checked_add(paragraph.len()).ok_or(ContractError::Limit("text bytes"))?;
-                if total_bytes > MAX_TOTAL_TEXT_BYTES {
-                    return Err(ContractError::Limit("text bytes"));
-                }
-                chars = chars.checked_add(paragraph.chars().count()).ok_or(ContractError::Limit("text characters"))?;
-                if chars > MAX_TEXT_CHARS {
-                    return Err(ContractError::Limit("text characters"));
-                }
-                if paragraph.chars().any(char::is_control) {
-                    return Err(ContractError::ControlCharacter);
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-fn safe_paragraph_count(doc: &Presentation, target: TextTarget) -> ContractResult<usize> {
-    let slide = doc.slide(target.slide_id).ok_or(ContractError::UnknownSlide(target.slide_id))?;
-    // This slice supports top-level shapes only. Group/table/notes/master edits need a separate
-    // explicit contract. Reject ambiguous duplicate IDs rather than picking the first match.
-    let mut matches = slide.shapes.iter().filter(|s| s.id == target.shape_id);
-    let shape = matches.next().ok_or(ContractError::UnknownShape(target))?;
-    if matches.next().is_some() || shape.locked || shape.hidden || !matches!(shape.kind, ShapeKind::Shape) {
-        return Err(ContractError::UnsupportedText(target));
-    }
-    let body = shape.text.as_ref().ok_or(ContractError::UnsupportedText(target))?;
-    if body.paragraphs.is_empty() || body.paragraphs.len() > MAX_PARAGRAPHS {
-        return Err(ContractError::UnsupportedText(target));
-    }
-    let mut text_bytes = 0usize;
-    for p in &body.paragraphs {
-        if p.runs.len() > MAX_RUNS_PER_PARAGRAPH || p.end_props.link.is_some() {
-            return Err(ContractError::UnsupportedText(target));
-        }
-        let props = p.runs.first().map(|r| &r.props);
-        for r in &p.runs {
-            if r.kind != RunKind::Text || r.props.link.is_some() || Some(&r.props) != props {
-                return Err(ContractError::UnsupportedText(target));
-            }
-            text_bytes = text_bytes.checked_add(r.text.len()).ok_or(ContractError::Limit("source text bytes"))?;
-            if text_bytes > MAX_TOTAL_TEXT_BYTES {
-                return Err(ContractError::Limit("source text bytes"));
-            }
+            seen.push(id);
         }
     }
-    Ok(body.paragraphs.len())
+    Ok(())
+}
+
+pub fn validate_materials(materials: &[Material]) -> ContractResult<()> {
+    if materials.len() > MAX_MATERIALS {
+        return Err(ContractError::Limit("materials"));
+    }
+    let mut seen = Vec::new();
+    for material in materials {
+        validate_material(material)?;
+        if seen.iter().any(|name: &String| name == &material.name) {
+            return Err(ContractError::DuplicateMaterial);
+        }
+        seen.push(material.name.clone());
+    }
+    Ok(())
+}
+
+fn validate_outline_page(page: &OutlinePage) -> ContractResult<()> {
+    if page.page_id.is_some_and(|id| id.0 == 0) {
+        return Err(ContractError::Schema);
+    }
+    plain_line(&page.title, MAX_TITLE_CHARS, "title")?;
+    if page.points.len() > MAX_POINTS {
+        return Err(ContractError::Limit("points"));
+    }
+    for point in &page.points {
+        plain_line(point, MAX_POINT_CHARS, "point")?;
+    }
+    Ok(())
+}
+
+fn validate_material(material: &Material) -> ContractResult<()> {
+    if material.name.is_empty() || material.name.chars().count() > MAX_MATERIAL_NAME_CHARS || material.name.chars().any(char::is_control) {
+        return Err(ContractError::Schema);
+    }
+    if material.body.chars().count() > MAX_MATERIAL_BODY_CHARS || has_disallowed_control(&material.body) {
+        return Err(ContractError::Schema);
+    }
+    Ok(())
+}
+
+/// A title or a point is one line. Newlines belong in a separate point.
+fn plain_line(text: &str, max_chars: usize, what: &'static str) -> ContractResult<()> {
+    if text.chars().count() > max_chars || text.chars().any(char::is_control) {
+        return Err(ContractError::Limit(what));
+    }
+    Ok(())
+}
+
+/// Comments and material text may contain newlines. Other control characters are rejected.
+fn has_disallowed_control(text: &str) -> bool {
+    text.chars().any(|c| c.is_control() && c != '\n' && c != '\t')
 }

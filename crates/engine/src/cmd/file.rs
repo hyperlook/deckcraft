@@ -309,8 +309,6 @@ fn revert(s: &mut Session, _p: &Value) -> Result<Value> {
     st.doc = st.saved_doc.clone();
     st.history = crate::History { limit: st.history.limit, ..Default::default() };
     st.revision += 1;
-    // Revert is a content change. The applied-job ledger stays: a reverted AI commit must not run again.
-    crate::bump_content_revision(st);
     ok()
 }
 

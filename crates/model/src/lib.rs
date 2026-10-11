@@ -12,6 +12,7 @@ pub mod chart;
 pub mod defaults;
 pub mod edit;
 pub mod resolve;
+pub mod story;
 pub mod style;
 pub mod table;
 pub mod text;
@@ -25,6 +26,7 @@ use serde::{Deserialize, Serialize};
 
 pub use anim::{AnimClass, AnimStart, Animation, Transition};
 pub use chart::Chart;
+pub use story::{Material, MaterialKind, Outline, OutlinePage};
 pub use style::{ColorBase, ColorRef, Effects, Fill, Line, ShapeStyle};
 pub use table::{Cell, Table};
 pub use text::{Paragraph, Run, RunProps, TextBody};
@@ -778,6 +780,12 @@ pub struct Presentation {
     pub next_id: u32,
     /// Embedded fonts (family names; bytes in `media`).
     pub embedded_fonts: Vec<(String, MediaId)>,
+    /// Agreed story for AI rounds. Editing a slide by hand does not change it.
+    #[serde(default, skip_serializing_if = "Outline::is_empty")]
+    pub outline: Outline,
+    /// Notes, extracted file text, and image captions used as facts for this deck.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub materials: Vec<Material>,
     /// Unmodelled presentation-level XML kept for round-trip.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_ext: Option<String>,

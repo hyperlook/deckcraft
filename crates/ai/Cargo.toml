@@ -3,13 +3,10 @@ name = "deckcraft-ai"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "DeckCraft AI business contracts and offline task state machine"
+description = "DeckCraft AI round context: outline, cited page, comment, and materials"
 
 [lints]
 workspace = true
-
-[features]
-test-support = []
 
 [dependencies]
 deckcraft-engine = { workspace = true }

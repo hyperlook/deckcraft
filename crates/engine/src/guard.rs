@@ -37,17 +37,15 @@ struct DocSnap {
     doc: std::sync::Arc<deckcraft_model::Presentation>,
     selection: crate::Selection,
     revision: u64,
-    content_revision: u64,
     history: crate::History,
     interaction: Option<crate::Interaction>,
-    applied_jobs: crate::ai_apply::AppliedJobs,
 }
 
 impl Session {
     /// Run command `id` (`f`) inside the guard.
     pub(crate) fn guarded(&mut self, id: &str, f: impl FnOnce(&mut Session) -> Result<Value>) -> Result<Value> {
-        // Every open document: a commit may target a background uid, and a panic must not leave
-        // its history, content identity, or applied-job ledger half-updated.
+        // Every open document: a commit may target a background document, and a panic must not
+        // leave its history or an in-progress pointer gesture half-updated.
         let before: Vec<DocSnap> = self
             .documents()
             .iter()
@@ -56,10 +54,8 @@ impl Session {
                 doc: doc.doc.clone(),
                 selection: doc.selection.clone(),
                 revision: doc.revision,
-                content_revision: doc.content_revision,
                 history: doc.history.clone(),
                 interaction: doc.interaction.clone(),
-                applied_jobs: doc.applied_jobs.clone(),
             })
             .collect();
         let depth = self.depth;
@@ -74,8 +70,6 @@ impl Session {
                     st.selection = snap.selection;
                     st.history = snap.history;
                     st.interaction = snap.interaction;
-                    st.applied_jobs = snap.applied_jobs;
-                    st.content_revision = snap.content_revision;
                     st.revision = snap.revision.max(st.revision).saturating_add(1);
                 }
                 log::error!("command `{id}` panicked: {msg}");
