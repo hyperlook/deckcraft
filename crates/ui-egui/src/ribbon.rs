@@ -85,8 +85,7 @@ pub fn title_bar(app: &mut SlideApp, ui: &mut Ui) {
             let from = app.session.active().map(|d| d.selection.slide).unwrap_or(0);
             app.start_show(from, false);
         }
-        if right.add_enabled(has_doc, egui::Button::new("AI")).on_hover_text("核对并保存导入上下文（本地，不调用模型）").clicked()
-        {
+        if right.add_enabled(has_doc, egui::Button::new("AI")).on_hover_text("聊天澄清需求，在原页面列表组织页计划").clicked() {
             let _ = app.run("view.pane", json!({"pane": "ai", "toggle": true}));
         }
         if icon_toggle(&mut right, Icon::CommentsBubble, "Comments", has_doc, app.ui.pane.as_deref() == Some("comments")).clicked() {

@@ -250,6 +250,9 @@ pub fn handle(app: &mut SlideApp, ctx: &egui::Context, req: &ControlRequest) -> 
             if i >= d.doc.slides.len() {
                 return err(format!("no slide {i}"));
             }
+            if d.doc.slides.get(i).is_some_and(|s| s.is_planned()) {
+                return err("计划页尚未展开，不能渲染为空白成品。");
+            }
             let (png, w, h) = deckcraft_engine::cmd::file::render_png(
                 &d.doc,
                 i,

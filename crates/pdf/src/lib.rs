@@ -88,6 +88,9 @@ impl Default for PdfOptions {
 
 /// Export `pres` as PDF bytes.
 pub fn export(pres: &Presentation, opts: &PdfOptions) -> Result<Vec<u8>> {
+    if pres.has_planned_pages() {
+        return Err(PdfError::Write("存在未展开计划页，请保存 .deckcraft。".into()));
+    }
     let slides: Vec<usize> = match &opts.slides {
         Some(v) => v.iter().copied().filter(|i| *i < pres.slides.len()).collect(),
         None => (0..pres.slides.len()).filter(|i| opts.include_hidden || !pres.slides[*i].hidden).collect(),

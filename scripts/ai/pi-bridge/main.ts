@@ -1,5 +1,5 @@
 // Fixed, tool-free local SDK adapter. No AgentSession, resource loader or extensions.
-import { BridgeError, DEADLINE_MS, INPUT_LIMIT, OUTPUT_LIMIT, ENDPOINT, SYSTEM, boundedFetch, consumeEvents, parseRequest, safeError } from "./protocol.ts";
+import { BridgeError, DEADLINE_MS, INPUT_LIMIT, OUTPUT_LIMIT, ENDPOINT, SYSTEM, SUMMARY_SYSTEM, PLAN_SYSTEM, parsePlan, parseSummary, parseResult, boundedFetch, consumeEvents, parseRequest, safeError } from "./protocol.ts";
 import { createReadStream } from "node:fs";
 
 console.log = console.warn = console.error = console.info = console.debug = () => {};
@@ -67,11 +67,11 @@ async function run(line: string) {
           !(await runtime.getAuth(model, {signal: controller.signal}))) throw new BridgeError("auth");
     } catch { throw new BridgeError(transportFailure ?? "auth"); }
     const stream = runtime.streamSimple(model, {
-      systemPrompt: SYSTEM,
+      systemPrompt: request.op === "summarize" ? SUMMARY_SYSTEM : request.op === "plan" ? PLAN_SYSTEM : SYSTEM,
       messages: [{role: "user", content: request.input, timestamp: Date.now()}],
     }, {
       signal: controller.signal, transport: "sse", maxRetries: 0,
-      timeoutMs: DEADLINE_MS, maxTokens: 4096, reasoning: "minimal", cacheRetention: "none",
+      timeoutMs: DEADLINE_MS, maxTokens: request.op === "generate" ? 4096 : 16384, reasoning: "minimal", cacheRetention: "none",
       fetch: boundedFetch(controller.signal, rawFetch, [ENDPOINT], 1, fault, budget),
       toolChoice: "none",
       onPayload(payload) {
@@ -81,8 +81,16 @@ async function run(line: string) {
         }
       },
     });
-    const result = await consumeEvents(stream, controller);
-    finish({id: requestId, type: "result", result});
+    if (request.op === "plan") {
+      const result = await consumeEvents(stream, controller, parsePlan);
+      finish({id: requestId, type: "plan", result});
+    } else if (request.op === "summarize") {
+      const result = await consumeEvents(stream, controller, parseSummary);
+      finish({id: requestId, type: "summary", result});
+    } else {
+      const result = await consumeEvents(stream, controller, parseResult);
+      finish({id: requestId, type: "result", result});
+    }
   } catch (e) {
     finish({id: requestId, type: "error", code: timedOut ? "timeout" : controller.signal.aborted ? safeError(e, true) : transportFailure ?? safeError(e, false)});
   }

@@ -54,6 +54,16 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
     let avail = ui.available_rect_before_wrap();
     app.canvas_rect = Some(avail);
     let Some(st) = app.session.active() else { return };
+    if st.selection.target == Target::Slides
+        && let Some(slide) = st.current_slide().filter(|s| s.is_planned()).cloned()
+    {
+        let width = ui.available_width().min(600.0);
+        ui.allocate_ui(vec2(width, ui.available_height()), |ui| {
+            crate::page_plan::editor(app, ui, &slide);
+        });
+        app.slide_rect = None;
+        return;
+    }
     if st.doc.slides.is_empty() && st.selection.target == Target::Slides {
         let resp = ui.allocate_rect(avail, Sense::click());
         ui.painter().text(avail.center(), Align2::CENTER_CENTER, "Click to add first slide", theme::font(22.0), t.text_dim);

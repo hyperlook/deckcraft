@@ -515,6 +515,9 @@ pub fn blank_presentation(size: Size, theme: Theme, title_slide: bool) -> Presen
         materials: vec![],
         context_draft: None,
         confirmed_context: None,
+        summary_draft: None,
+        confirmed_summary: None,
+        workspace: None,
         raw_ext: None,
     };
     if title_slide {

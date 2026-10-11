@@ -16,6 +16,7 @@ pub mod fillui;
 pub mod icons;
 pub mod media;
 pub mod menus;
+mod page_plan;
 pub mod panes;
 pub mod ribbon;
 pub mod show;
@@ -137,7 +138,10 @@ impl Default for UiState {
 /// UI-only commands (id, label, shortcut, params).
 pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("ai.loadModels", "AI: Load Pi Models", None, "{}"),
-    ("ai.sendMaterial", "AI: Send Authorized Material", None, "{}"),
+    ("ai.chat", "AI: Send Requirement", None, "{text}"),
+    ("ai.reply", "AI: Answer Clarification", None, "{field,value}"),
+    ("ai.authorize", "AI: Allow Model for Document", None, "{on}"),
+    ("ai.retry", "AI: Retry from Current Document", None, "{}"),
     ("ai.cancelRequest", "AI: Cancel Request", None, "{}"),
     ("view.normal", "Normal", None, "{}"),
     ("view.outline", "Outline View", None, "{}"),
@@ -181,7 +185,6 @@ pub struct Perf {
 }
 
 pub struct SlideApp {
-    pub(crate) assistant: assistant::Assistant,
     pub(crate) ai_pilot: ai_pilot::Pilot,
     pub session: Session,
     pub services: Services,
@@ -227,7 +230,6 @@ impl SlideApp {
     pub fn new(session: Session, mut services: Services) -> Self {
         let audio_out = services.audio_out.take();
         SlideApp {
-            assistant: assistant::Assistant::default(),
             ai_pilot: ai_pilot::Pilot::default(),
             session,
             services,
@@ -300,7 +302,9 @@ impl SlideApp {
 
     fn run_ui(&mut self, id: &str, p: &Value) -> Result<Value, String> {
         match id {
-            "ai.loadModels" | "ai.sendMaterial" | "ai.cancelRequest" => return ai_pilot::action(self, id),
+            "ai.loadModels" | "ai.chat" | "ai.reply" | "ai.authorize" | "ai.retry" | "ai.cancelRequest" => {
+                return ai_pilot::action(self, id, p);
+            }
             "view.normal" => self.ui.view = ViewMode::Normal,
             "view.outline" => self.ui.view = ViewMode::Outline,
             "view.sorter" => self.ui.view = ViewMode::Sorter,
@@ -381,6 +385,10 @@ impl SlideApp {
     }
 
     pub fn start_show(&mut self, from: usize, reading: bool) {
+        if self.session.active().is_some_and(|d| d.doc.has_planned_pages()) {
+            self.set_status("计划页尚未展开；当前不能作为已完成演示放映。");
+            return;
+        }
         self.media.stop_owned(media::Owner::Editor);
         if let Some(d) = self.session.active() {
             self.show = Some(show::Show::new(&d.doc, from, reading, self.ui.presenter_view && !reading));
@@ -432,8 +440,12 @@ impl SlideApp {
         if let Some(pick) = self.services.pick_save.as_mut() {
             if let Some(path) = pick(&suggested) {
                 match self.session.execute("file.saveAs", &json!({"path": path})) {
-                    Ok(_) => {
-                        self.set_status(format!("Saved {path}"));
+                    Ok(result) => {
+                        self.set_status(if result.get("nativeSaveRequired").and_then(Value::as_bool) == Some(true) {
+                            "已导出页面；AI 原文、大纲与草稿尚需另存 .deckcraft。".into()
+                        } else {
+                            format!("Saved {path}")
+                        });
                         self.ui.recent.retain(|p| *p != path);
                         self.ui.recent.insert(0, path);
                     }
@@ -467,7 +479,11 @@ impl SlideApp {
     pub fn save(&mut self) {
         if self.session.active().and_then(|d| d.path.clone()).is_some() {
             match self.session.execute("file.save", &json!({})) {
-                Ok(_) => self.set_status("Saved"),
+                Ok(result) => self.set_status(if result.get("nativeSaveRequired").and_then(Value::as_bool) == Some(true) {
+                    "已导出页面；AI 原文、大纲与草稿尚需另存 .deckcraft。"
+                } else {
+                    "Saved"
+                }),
                 Err(e) => self.set_status(e.to_string()),
             }
         } else {
@@ -726,8 +742,18 @@ impl SlideApp {
                 return;
             }
             match self.ui.view {
-                ViewMode::Sorter => sorter::show(self, ui),
-                ViewMode::NotesPage => sorter::notes_page(self, ui),
+                ViewMode::Sorter => {
+                    if self.ui.pane.as_deref() == Some("ai") {
+                        panes::show(self, ui);
+                    }
+                    sorter::show(self, ui);
+                }
+                ViewMode::NotesPage => {
+                    if self.ui.pane.as_deref() == Some("ai") {
+                        panes::show(self, ui);
+                    }
+                    sorter::notes_page(self, ui);
+                }
                 ViewMode::Outline | ViewMode::Normal | ViewMode::Reading => {
                     if self.ui.pane.is_some() {
                         panes::show(self, ui);

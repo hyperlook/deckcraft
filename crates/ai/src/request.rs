@@ -26,11 +26,13 @@ impl ModelChoice {
 pub enum Request {
     Models { id: u64 },
     Generate { id: u64, provider: String, model: String, input: String },
+    Summarize { id: u64, provider: String, model: String, input: String },
+    Plan { id: u64, provider: String, model: String, input: String },
 }
 impl Request {
     pub fn id(&self) -> u64 {
         match self {
-            Self::Models { id } | Self::Generate { id, .. } => *id,
+            Self::Models { id } | Self::Generate { id, .. } | Self::Summarize { id, .. } | Self::Plan { id, .. } => *id,
         }
     }
     pub fn encode(&self) -> Result<Vec<u8>, Failure> {
@@ -38,7 +40,10 @@ impl Request {
         if self.id() == 0 || self.id() > 9_007_199_254_740_991 {
             return Err(Failure::Protocol);
         }
-        if let Self::Generate { provider, model, input, .. } = self {
+        if let Self::Generate { provider, model, input, .. }
+        | Self::Summarize { provider, model, input, .. }
+        | Self::Plan { provider, model, input, .. } = self
+        {
             if provider != "openai-codex" || model.is_empty() || model.len() > 200 || input.trim().is_empty() {
                 return Err(Failure::Protocol);
             }
@@ -86,14 +91,16 @@ pub enum Failure {
     Transport,
     Exited,
     Busy,
+    NoEvidence,
 }
 impl Failure {
     pub fn label(self) -> &'static str {
         match self {
             Self::Auth => "Pi 认证不可用或刷新失败：请在 Pi /login openai-codex 后重试。",
             Self::RateLimit => "服务商限流 / 额度不足；未自动重试，请稍后手动重试。",
-            Self::InvalidOutput => "模型返回了坏 JSON、工具调用或不符合标题/要点契约；没有写稿。",
-            Self::Limit => "输入或输出超限（512 KiB / 1 MiB）；请缩短素材后重试。",
+            Self::InvalidOutput => "模型结果未通过校验（结构、规模或页面映射不符）；原有页面和计划保留。",
+            Self::NoEvidence => "全稿没有可读原文：当前仅支持文字依据，请提供含文字的文稿；不从空白或图片猜测意图。",
+            Self::Limit => "提取不完整或请求超限（最多 64 页、512 KiB 输入 / 1 MiB 输出）；已阻止全稿归纳，未静默截取。请减少文稿或素材后重新提取。",
             Self::Cancelled => "已取消；迟到结果会被丢弃，没有写稿。",
             Self::Timeout => "请求超过 120 秒；已终止连接，可手动重试。",
             Self::Network => "连接或模型响应失败；请检查网络及 Pi 登录后手动重试。",
@@ -119,6 +126,14 @@ pub enum Event {
         id: u64,
         result: Content,
     },
+    Summary {
+        id: u64,
+        result: deckcraft_model::DeckSummary,
+    },
+    Plan {
+        id: u64,
+        result: deckcraft_model::PlanDraft,
+    },
     Error {
         id: u64,
         code: Failure,
@@ -127,7 +142,7 @@ pub enum Event {
 impl Event {
     pub fn id(&self) -> u64 {
         match self {
-            Self::Models { id, .. } | Self::Result { id, .. } | Self::Error { id, .. } => *id,
+            Self::Models { id, .. } | Self::Result { id, .. } | Self::Summary { id, .. } | Self::Plan { id, .. } | Self::Error { id, .. } => *id,
         }
     }
     pub fn decode(bytes: &[u8]) -> Result<Self, Failure> {
@@ -139,6 +154,8 @@ impl Event {
             Self::Models { models, sdk_version, .. }
                 if models.len() <= 256 && sdk_version.len() <= 80 && models.iter().all(ModelChoice::validate) => {}
             Self::Result { result, .. } if result.validate() => {}
+            Self::Summary { result, .. } if result.validate() => {}
+            Self::Plan { result, .. } if result.validate() => {}
             Self::Error { .. } => {}
             _ => return Err(Failure::InvalidOutput),
         }
@@ -159,6 +176,8 @@ pub enum Status {
     Idle,
     Running(Request),
     Candidate(Content),
+    Summary(deckcraft_model::DeckSummary),
+    Plan(deckcraft_model::PlanDraft),
     ModelsReady,
     Failed(Failure),
     Cancelled,
@@ -193,6 +212,24 @@ impl Lifecycle {
         self.status = Status::Running(request.clone());
         Ok(request)
     }
+    pub fn begin_summary(&mut self, choice: &ModelChoice, snapshot: &crate::synthesis::Snapshot) -> Result<Request, Failure> {
+        let Request::Generate { id, provider, model, input } = self.begin(Some(choice), &snapshot.input)? else {
+            return Err(Failure::Protocol);
+        };
+        let request = Request::Summarize { id, provider, model, input };
+        self.status = Status::Running(request.clone());
+        Ok(request)
+    }
+
+    pub fn begin_plan(&mut self, choice: &ModelChoice, input: &str) -> Result<Request, Failure> {
+        let Request::Generate { id, provider, model, input } = self.begin(Some(choice), input)? else {
+            return Err(Failure::Protocol);
+        };
+        let request = Request::Plan { id, provider, model, input };
+        self.status = Status::Running(request.clone());
+        Ok(request)
+    }
+
     pub fn receive(&mut self, event: Event) {
         let Status::Running(request) = &self.status else { return };
         if event.id() != request.id() {
@@ -207,6 +244,8 @@ impl Lifecycle {
                 Status::ModelsReady
             }
             (Request::Generate { .. }, Event::Result { result, .. }) if result.validate() => Status::Candidate(result),
+            (Request::Summarize { .. }, Event::Summary { result, .. }) if result.validate() => Status::Summary(result),
+            (Request::Plan { .. }, Event::Plan { result, .. }) if result.validate() => Status::Plan(result),
             (_, Event::Error { code, .. }) => Status::Failed(code),
             _ => Status::Failed(Failure::Protocol),
         };
@@ -244,6 +283,35 @@ mod tests {
         assert!(matches!(life.status, Status::Candidate(_)));
         life.receive(Event::Error { id: second.id(), code: Failure::Auth });
         assert!(matches!(life.status, Status::Candidate(_)));
+    }
+    #[test]
+    fn summary_events_are_request_typed_and_cancelled_late_results_are_discarded() {
+        use deckcraft_model::{DeckSummary, SlideId, SummaryPage};
+        let doc = deckcraft_model::Presentation::default();
+        let mut evidence = crate::extract_context(&doc);
+        evidence.pages[0].sources.push(deckcraft_model::ContextSource {
+            shape_path: vec![deckcraft_model::ShapeId(1)],
+            paragraph: 0,
+            text: "public fixture".into(),
+            title: false,
+        });
+        let snapshot = crate::synthesis::Snapshot::from_evidence(evidence).unwrap();
+        let result = DeckSummary {
+            mainline: "问题到行动".into(),
+            pages: vec![SummaryPage { page_id: SlideId(1), role: "引入".into(), intent: "建立问题，为行动铺垫".into(), unknown: false }],
+        };
+        let mut life = Lifecycle::default();
+        let request = life.begin_summary(&choice(), &snapshot).unwrap();
+        life.receive(Event::Result { id: request.id(), result: Content { title: "legacy".into(), points: vec![] } });
+        assert!(matches!(life.status, Status::Failed(Failure::Protocol)));
+        let request = life.begin_summary(&choice(), &snapshot).unwrap();
+        life.cancel();
+        life.receive(Event::Summary { id: request.id(), result: result.clone() });
+        assert!(matches!(life.status, Status::Cancelled));
+        let request = life.begin_summary(&choice(), &snapshot).unwrap();
+        life.receive(Event::Summary { id: request.id(), result });
+        assert!(matches!(life.status, Status::Summary(_)));
+        assert!(Event::decode(br#"{"id":1,"type":"summary","result":{"mainline":"x","pages":[{"pageId":1,"role":"r","intent":"i","unknown":false,"command":"file.save"}]}}"#).is_err());
     }
     #[test]
     fn strict_bounds_and_whitelist() {

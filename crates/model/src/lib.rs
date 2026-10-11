@@ -15,9 +15,11 @@ pub mod edit;
 pub mod resolve;
 pub mod story;
 pub mod style;
+pub mod summary;
 pub mod table;
 pub mod text;
 pub mod theme;
+pub mod workspace;
 
 use std::sync::Arc;
 
@@ -30,9 +32,11 @@ pub use chart::Chart;
 pub use context::{ContextDiagnostic, ContextDraft, ContextPage, ContextSource};
 pub use story::{Material, MaterialKind, Outline, OutlinePage};
 pub use style::{ColorBase, ColorRef, Effects, Fill, Line, ShapeStyle};
+pub use summary::{DeckSummary, SummaryPage, SummaryReview};
 pub use table::{Cell, Table};
 pub use text::{Paragraph, Run, RunProps, TextBody};
 pub use theme::Theme;
+pub use workspace::{PageIntent, PageState, PlanDraft, PlannedContent, Requirements, WorkspaceContext};
 
 pub(crate) fn yes() -> bool {
     true
@@ -480,6 +484,9 @@ pub struct Comment {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Slide {
+    /// A planned slot is not a rendered slide; Existing adds an optional inferred intent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_plan: Option<PageIntent>,
     pub id: SlideId,
     pub layout: LayoutId,
     pub name: String,
@@ -500,6 +507,7 @@ pub struct Slide {
 impl Default for Slide {
     fn default() -> Self {
         Slide {
+            ai_plan: None,
             id: SlideId(0),
             layout: LayoutId(0),
             name: String::new(),
@@ -517,6 +525,9 @@ impl Default for Slide {
 }
 
 impl Slide {
+    pub fn is_planned(&self) -> bool {
+        self.ai_plan.as_ref().is_some_and(|p| p.state == PageState::Planned)
+    }
     pub fn shape(&self, id: ShapeId) -> Option<&Shape> {
         find_shape(&self.shapes, id)
     }
@@ -525,6 +536,11 @@ impl Slide {
     }
     /// The slide's title text (first title placeholder), for thumbnails, outline and navigation.
     pub fn title(&self) -> String {
+        if let Some(plan) = &self.ai_plan
+            && self.is_planned()
+        {
+            return plan.title.clone();
+        }
         self.shapes
             .iter()
             .find(|s| s.ph_type().is_some_and(PhType::is_title))
@@ -794,6 +810,13 @@ pub struct Presentation {
     /// Provenance and coverage at the last explicit confirmation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed_context: Option<ContextDraft>,
+    /// Versioned semantic synthesis, distinct from legacy excerpt outlines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary_draft: Option<SummaryReview>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed_summary: Option<SummaryReview>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<WorkspaceContext>,
     /// Unmodelled presentation-level XML kept for round-trip.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_ext: Option<String>,

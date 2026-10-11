@@ -31,18 +31,39 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
                     if i >= doc.slides.len() {
                         break;
                     }
-                    let (cell, resp) = ui.allocate_exact_size(vec2(tw + 36.0, th + 36.0), Sense::click_and_drag());
+                    let (cell, resp) = ui.allocate_exact_size(vec2(tw + 36.0, th + 76.0), Sense::click_and_drag());
                     let img = Rect::from_min_size(cell.min + vec2(18.0, 8.0), vec2(tw, th));
                     rects.push((i, cell));
                     let p = ui.painter();
-                    match app.textures.thumb(ui.ctx(), &doc, i, (tw * ppp) as u32, &mut budget) {
-                        Some(tex) => {
-                            p.image(tex.id(), img, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+                    let planned = doc.slides.get(i).is_some_and(|s| crate::page_plan::paint(ui, s, img));
+                    if !planned {
+                        match app.textures.thumb(ui.ctx(), &doc, i, (tw * ppp) as u32, &mut budget) {
+                            Some(tex) => {
+                                p.image(tex.id(), img, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+                            }
+                            None => {
+                                p.rect_filled(img, CornerRadius::ZERO, Color32::WHITE);
+                                need_more = true;
+                            }
                         }
-                        None => {
-                            p.rect_filled(img, CornerRadius::ZERO, Color32::WHITE);
-                            need_more = true;
-                        }
+                    }
+                    let resp = if let Some(plan) = doc.slides.get(i).and_then(|s| s.ai_plan.as_ref()) {
+                        resp.on_hover_text(format!("{}：{}{}", plan.title, plan.intent, if plan.unknown { "（未知）" } else { "" }))
+                    } else {
+                        resp
+                    };
+                    if let Some(plan) = doc.slides.get(i).and_then(|s| s.ai_plan.as_ref()).filter(|_| !planned) {
+                        let caption = p.layout(
+                            format!("{} · {}{}", plan.title, plan.intent, if plan.unknown { "（未知）" } else { "" }),
+                            theme::font(10.5),
+                            t.text_dim,
+                            tw,
+                        );
+                        p.with_clip_rect(Rect::from_min_size(pos2(img.min.x, img.max.y + 24.0), vec2(tw, 40.0)).intersect(ui.clip_rect())).galley(
+                            pos2(img.min.x, img.max.y + 24.0),
+                            caption,
+                            t.text_dim,
+                        );
                     }
                     let id = doc.slides.get(i).map(|s| s.id);
                     let selected = i == cur || id.is_some_and(|id| multi.contains(&id));

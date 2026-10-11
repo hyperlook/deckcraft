@@ -8,6 +8,8 @@
 mod context;
 pub mod request;
 mod round;
+pub mod synthesis;
+pub mod workspace;
 pub use context::{extract_context, review_existing};
 
 pub use round::{FACT_RULE, ModelBrief, Round};

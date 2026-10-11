@@ -1,5 +1,7 @@
 # #13 检查点：离线提取与核对底座 — 产品流程需修订
 
+> 历史工程记录。#13 已按 superseded / not planned 归档，不是产品完成。底座由 #20 复用；新路线为 #20 + #12 共同工作区 → #15 共享执行 → #18 外部入口。以 [最新 RFC](rfcs/ai-assistant.md)、[迁移计划](ai-unified-workspace-plan.md) 与 #10 为准，不执行下方历史启动语或独立大纲确认流程。
+
 基线：`main@0661aa2`。封存分支：`checkpoint/ai-context-extraction`。本检查点保留当前实现、测试和图像，不合入 main，不代表产品验收通过。没有启动子代理、访问模型或实现真实 AI 入口。
 
 ## 产品评估结论与后续边界

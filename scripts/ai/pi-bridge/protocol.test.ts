@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { BridgeError, ENDPOINT, INPUT_LIMIT, OUTPUT_LIMIT, boundedFetch, consumeEvents, parseRequest, parseResult, safeError } from "./protocol.ts";
+import { BridgeError, ENDPOINT, INPUT_LIMIT, OUTPUT_LIMIT, boundedFetch, consumeEvents, parseRequest, parseResult, parseSummary, parsePlan, safeError } from "./protocol.ts";
 const generate = {id: 1, op: "generate", provider: "openai-codex", model: "fixture", input: "public data"};
 const result = {title: "Public", points: ["data"]};
 async function* events(values: any[]) { for (const v of values) yield v; }
@@ -11,6 +11,46 @@ describe("strict tool-free contract (offline, no personal auth)", () => {
       expect(() => parseRequest(JSON.stringify(value))).toThrow();
     }
     expect(() => parseRequest("x".repeat(INPUT_LIMIT + 1))).toThrow();
+  });
+  test("whole-deck summary is a separate, concise, strict contract", async () => {
+    expect(parseRequest(JSON.stringify({...generate, op: "summarize"})).op).toBe("summarize");
+    const summary = {mainline: "从问题到方案再到行动", pages: [
+      {pageId: 11, role: "建立问题", intent: "为后续行动方案铺垫", unknown: false},
+      {pageId: 12, role: "未知", intent: "图片未读，无法判断", unknown: true},
+    ]};
+    expect(parseSummary(JSON.stringify(summary))).toEqual(summary);
+    const bad = [
+      {...summary, command: "file.save"}, {...summary, pages: []},
+      {...summary, mainline: "x".repeat(2001)},
+      {...summary, pages: [summary.pages[0], summary.pages[0]]},
+      {...summary, pages: [{...summary.pages[0], pageId: -1}]},
+      {...summary, pages: [{...summary.pages[0], pageId: 2**32}]},
+      {...summary, pages: [{...summary.pages[0], role: "x".repeat(201)}]},
+      {...summary, pages: [{...summary.pages[0], intent: "x".repeat(501)}]},
+      {...summary, pages: [{...summary.pages[0], unknown: "false"}]},
+      {...summary, pages: [{...summary.pages[0], intent: "line\nline"}]},
+      {...summary, pages: [{...summary.pages[0], sources: []}]},
+      result,
+    ];
+    for (const value of bad) expect(() => parseSummary(JSON.stringify(value))).toThrow();
+    const event = {type: "done", reason: "stop", message: {content: [{type: "text", text: JSON.stringify(summary)}]}};
+    expect(await consumeEvents(events([event]), new AbortController(), parseSummary)).toEqual(summary);
+    await expect(consumeEvents(events([{...event, reason: "length"}]), new AbortController(), parseSummary)).rejects.toThrow();
+    await expect(consumeEvents(events([{type: "toolcall_start"}]), new AbortController(), parseSummary)).rejects.toThrow();
+  });
+  test("new-project plan has no model-assigned identities or commands", async () => {
+    const plan = {mainline: "问题、方案、行动", pages: Array.from({length:3}, (_, i) => ({title:`页 ${i+1}`, intent:"表达意图；事实待补"}))};
+    expect(parseRequest(JSON.stringify({...generate, op:"plan"})).op).toBe("plan");
+    expect(parsePlan(JSON.stringify(plan))).toEqual(plan);
+    for (const v of [{...plan, pages:[]}, {...plan, pages:Array(13).fill(plan.pages[0])}, {...plan, mainline:"x".repeat(2001)},
+      {...plan, pages:plan.pages.map(p => ({...p, pageId:123}))}, {...plan, command:"shape.insert"},
+      {...plan, pages:plan.pages.map(p => ({...p, intent:"line\nline"}))},
+      {...plan, pages:plan.pages.map(p => ({...p, title:""}))}, result]) {
+      expect(() => parsePlan(JSON.stringify(v))).toThrow();
+    }
+    const terminal = {type:"done",reason:"stop",message:{content:[{type:"text",text:JSON.stringify(plan)}]}};
+    expect(await consumeEvents(events([terminal]),new AbortController(),parsePlan)).toEqual(plan);
+    await expect(consumeEvents(events([{type:"toolcall_start"}]),new AbortController(),parsePlan)).rejects.toThrow();
   });
   test("limited result and field whitelist", () => {
     expect(parseResult(JSON.stringify(result))).toEqual(result);

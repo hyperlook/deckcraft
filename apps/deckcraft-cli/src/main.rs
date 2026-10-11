@@ -144,6 +144,9 @@ fn render(args: &[String]) -> Result<(), String> {
     let mut s = Session::new();
     open(&mut s, input.as_deref(), sample)?;
     let st = s.doc().map_err(|e| e.to_string())?;
+    if st.doc.has_planned_pages() {
+        return Err("存在未展开计划页，请保存 .deckcraft；不能渲染为空白成品。".into());
+    }
     let n = st.doc.slides.len();
     let list: Vec<usize> = if all { (0..n).collect() } else { vec![slide.unwrap_or(0)] };
     if all {

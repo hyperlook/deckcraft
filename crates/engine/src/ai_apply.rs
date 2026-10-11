@@ -106,6 +106,8 @@ impl Session {
             }
             doc.outline = outline;
             doc.confirmed_context = review;
+            doc.confirmed_summary = None; // Legacy commands cannot retain a semantic-confirmation label.
+            doc.summary_draft = None;
             Ok(())
         })
         .map(|changed| StoreOutcome { doc_uid, changed })
@@ -123,6 +125,42 @@ impl Session {
         .map(|changed| StoreOutcome { doc_uid, changed })
     }
 
+    /// Store a semantic draft or explicitly confirm it. Neither operation edits slides.
+    pub fn set_summary(&mut self, doc_uid: u64, review: deckcraft_model::SummaryReview, confirm: bool) -> Result<StoreOutcome, ApplyError> {
+        crate::ai_contract::validate_summary(&review)?;
+        self.guarded_edit(
+            "ai.setSummary",
+            doc_uid,
+            if confirm { "AI: 确认全稿主线与逐页意图" } else { "AI: 暂存归纳候选" }.into(),
+            move |doc| {
+                // A whole-deck plan cannot silently describe deleted, added or reordered pages.
+                if doc.slides.len() != review.summary.pages.len() || !doc.slides.iter().zip(&review.summary.pages).all(|(s, p)| s.id == p.page_id) {
+                    return Err(ApplyError::PageGone);
+                }
+                if confirm {
+                    doc.outline = Outline {
+                        pages: review
+                            .summary
+                            .pages
+                            .iter()
+                            .filter(|p| !p.unknown)
+                            .map(|p| deckcraft_model::OutlinePage { page_id: Some(p.page_id), title: p.role.clone(), points: vec![p.intent.clone()] })
+                            .collect(),
+                    };
+                    doc.materials = review.evidence.materials.clone();
+                    doc.confirmed_context = Some(review.evidence.clone());
+                    doc.context_draft = None;
+                    doc.summary_draft = None;
+                    doc.confirmed_summary = Some(review);
+                } else {
+                    doc.summary_draft = Some(review);
+                }
+                Ok(())
+            },
+        )
+        .map(|changed| StoreOutcome { doc_uid, changed })
+    }
+
     /// Store the materials for this deck. Bodies are text the host already extracted, not paths.
     pub fn set_materials(&mut self, doc_uid: u64, materials: Vec<Material>) -> Result<StoreOutcome, ApplyError> {
         crate::ai_contract::validate_materials(&materials)?;
@@ -133,7 +171,7 @@ impl Session {
         .map(|changed| StoreOutcome { doc_uid, changed })
     }
 
-    fn guarded_edit(
+    pub(crate) fn guarded_edit(
         &mut self,
         id: &str,
         doc_uid: u64,
@@ -229,7 +267,9 @@ fn install_page(doc: &mut Presentation, proposal: &PageProposal) -> Result<(), A
             }
         }
     }
-    doc.outline.upsert(proposal.page_id, proposal.title.clone(), proposal.points.clone());
+    if doc.confirmed_summary.is_none() {
+        doc.outline.upsert(proposal.page_id, proposal.title.clone(), proposal.points.clone());
+    } // Full page copy must not overwrite a confirmed expression plan.
     Ok(())
 }
 
@@ -310,6 +350,9 @@ fn clamp_text_caret(selection: &mut Selection, doc: &Presentation) {
 #[cfg(test)]
 #[path = "context_tests.rs"]
 mod context_tests;
+#[cfg(test)]
+#[path = "summary_tests.rs"]
+mod summary_tests;
 #[cfg(test)]
 #[path = "ai_apply_tests.rs"]
 mod tests;

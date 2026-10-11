@@ -51,6 +51,9 @@ pub fn import(bytes: &[u8]) -> Result<Presentation, PptxError> {
 
 /// Write a `.pptx` package.
 pub fn export(p: &Presentation) -> Result<Vec<u8>, PptxError> {
+    if p.has_planned_pages() {
+        return Err(PptxError::Unsupported("存在未展开计划页，请保存 .deckcraft；不能导出为空白成品。".into()));
+    }
     write::export(p)
 }
 

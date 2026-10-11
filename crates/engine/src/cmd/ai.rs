@@ -15,6 +15,39 @@ use crate::{EngineError, Result, Session};
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec {
+            id: "ai.installWorkspace",
+            label: "Prepare AI Workspace",
+            menu: &[],
+            shortcut: None,
+            params: "{docUid,expectedRevision,context,plan?,summary?,derived?} — atomic plan or derived source preparation",
+            enabled: has_doc,
+            run: crate::workspace::command,
+            journal: false,
+            undoable: false,
+        },
+        CommandSpec {
+            id: "ai.adjustPageIntent",
+            label: "Adjust Page Intent",
+            menu: &[],
+            shortcut: None,
+            params: "{docUid?,pageId,title,intent} — one undoable intent edit; never changes source facts",
+            enabled: has_doc,
+            run: crate::workspace::adjust,
+            journal: false,
+            undoable: false,
+        },
+        CommandSpec {
+            id: "ai.setSummary",
+            label: "Store Whole-Deck Summary",
+            menu: &[],
+            shortcut: None,
+            params: "{docUid?, review: {version:1, summary:{mainline,pages:[{pageId,role,intent,unknown}]}, evidence}, confirm: bool} — draft/confirmation; no slide writes",
+            enabled: has_doc,
+            run: set_summary,
+            journal: false,
+            undoable: false,
+        },
+        CommandSpec {
             id: "ai.setOutline",
             label: "Set AI Outline",
             menu: &[],
@@ -59,6 +92,20 @@ pub fn specs() -> Vec<CommandSpec> {
             undoable: false,
         },
     ]
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SummaryParams {
+    doc_uid: Option<u64>,
+    review: deckcraft_model::SummaryReview,
+    confirm: bool,
+}
+fn set_summary(session: &mut Session, params: &Value) -> Result<Value> {
+    let parsed: SummaryParams = parse(params)?;
+    let uid = doc_uid(session, parsed.doc_uid)?;
+    let outcome = session.set_summary(uid, parsed.review, parsed.confirm).map_err(|e| fail("ai.setSummary", e))?;
+    serde_json::to_value(outcome).map_err(|e| EngineError::Other(e.to_string()))
 }
 
 fn set_outline(session: &mut Session, params: &Value) -> Result<Value> {

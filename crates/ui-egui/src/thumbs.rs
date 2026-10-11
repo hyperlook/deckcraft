@@ -85,7 +85,8 @@ fn list(app: &mut SlideApp, ui: &mut Ui) {
                 }
             });
         }
-        let (row, resp) = ui.allocate_exact_size(vec2(width, th + 16.0), Sense::click_and_drag());
+        let has_intent = doc.slides.get(i).is_some_and(|s| s.ai_plan.is_some() && !s.is_planned());
+        let (row, resp) = ui.allocate_exact_size(vec2(width, th + if has_intent { 54.0 } else { 16.0 }), Sense::click_and_drag());
         let img = Rect::from_min_size(pos2(row.min.x + 30.0, row.min.y + 6.0), vec2(tw, th));
         rects.push((i, row));
         let p = ui.painter();
@@ -107,19 +108,37 @@ fn list(app: &mut SlideApp, ui: &mut Ui) {
             p.text(pos2(row.min.x + 14.0, img.min.y + 20.0), Align2::CENTER_TOP, "★", theme::font(10.0), t.text_faint);
         }
         let wpx = (tw * ppp).round() as u32;
-        match app.textures.thumb(ui.ctx(), &doc, i, wpx, &mut budget) {
-            Some(tex) => {
-                p.image(
-                    tex.id(),
-                    img,
-                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                    if hidden { Color32::from_white_alpha(140) } else { Color32::WHITE },
-                );
+        let planned = doc.slides.get(i).is_some_and(|s| crate::page_plan::paint(ui, s, img));
+        if !planned {
+            match app.textures.thumb(ui.ctx(), &doc, i, wpx, &mut budget) {
+                Some(tex) => {
+                    p.image(
+                        tex.id(),
+                        img,
+                        Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                        if hidden { Color32::from_white_alpha(140) } else { Color32::WHITE },
+                    );
+                }
+                None => {
+                    p.rect_filled(img, CornerRadius::ZERO, Color32::WHITE);
+                    need_more = true;
+                }
             }
-            None => {
-                p.rect_filled(img, CornerRadius::ZERO, Color32::WHITE);
-                need_more = true;
-            }
+        }
+        let resp = if let Some(plan) = doc.slides.get(i).and_then(|s| s.ai_plan.as_ref()) {
+            resp.on_hover_text(format!("{}：{}{}", plan.title, plan.intent, if plan.unknown { "（未知）" } else { "" }))
+        } else {
+            resp
+        };
+        if has_intent && let Some(plan) = doc.slides.get(i).and_then(|s| s.ai_plan.as_ref()) {
+            let caption = p.layout(
+                format!("{} · {}{}", plan.title, plan.intent, if plan.unknown { "（未知）" } else { "" }),
+                theme::font(10.5),
+                t.text_dim,
+                tw,
+            );
+            let clipped = p.with_clip_rect(Rect::from_min_size(pos2(img.min.x, img.max.y + 4.0), vec2(tw, 42.0)).intersect(ui.clip_rect()));
+            clipped.galley(pos2(img.min.x, img.max.y + 4.0), caption, t.text_dim);
         }
         if selected {
             p.rect_stroke(img.expand(2.0), CornerRadius::same(4), Stroke::new(3.0, t.accent), egui::StrokeKind::Outside);
@@ -147,7 +166,7 @@ fn list(app: &mut SlideApp, ui: &mut Ui) {
                 }
             }
         }
-        if resp.double_clicked() {
+        if resp.double_clicked() && !planned {
             app.start_show(i, false);
         }
         if resp.drag_started() {
@@ -194,6 +213,12 @@ fn list(app: &mut SlideApp, ui: &mut Ui) {
 }
 
 pub fn slide_menu(app: &mut SlideApp, ui: &mut Ui, i: usize) {
+    if let Some(slide) = app.session.active().and_then(|d| d.doc.slides.get(i)).cloned()
+        && slide.ai_plan.is_some()
+    {
+        crate::page_plan::editor(app, ui, &slide);
+        ui.separator();
+    }
     if app.session.active().is_some_and(|d| d.selection.slide != i && !d.selection.slides.iter().any(|id| d.doc.slide_index(*id) == Some(i))) {
         let _ = app.run("slide.go", json!({"index": i}));
     }

@@ -188,8 +188,22 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let format = str_param(p, "format").unwrap_or(format_for_path(&path));
     let bytes = save_bytes(&s.doc()?.doc, format)?;
     write_file(&path, &bytes)?;
-    mark_saved(s, Some(path.clone()))?;
-    Ok(json!({"path": path, "bytes": bytes.len()}))
+    let doc = &s.doc()?.doc;
+    let has_ai_metadata = !doc.outline.is_empty()
+        || !doc.materials.is_empty()
+        || doc.context_draft.is_some()
+        || doc.confirmed_context.is_some()
+        || doc.summary_draft.is_some()
+        || doc.confirmed_summary.is_some()
+        || doc.workspace.is_some()
+        || doc.slides.iter().any(|s| s.ai_plan.is_some());
+    let native_required = format != "deckcraft" && has_ai_metadata;
+    if !native_required {
+        mark_saved(s, Some(path.clone()))?;
+    }
+    // PPTX saves are exports when private project metadata would otherwise be lost.
+    // Keep the native path/saved baseline and dirty/recovery state until an actual native save.
+    Ok(json!({"path": path, "bytes": bytes.len(), "nativeSaveRequired": native_required}))
 }
 
 fn save_as(s: &mut Session, p: &Value) -> Result<Value> {
@@ -219,6 +233,9 @@ fn render(s: &mut Session, p: &Value) -> Result<Value> {
     if i >= st.doc.slides.len() {
         return Err(bad("file.render", format!("no slide {i}")));
     }
+    if st.doc.slides.get(i).is_some_and(|s| s.is_planned()) {
+        return Err(bad("file.render", "计划页尚未展开，不能渲染为空白成品。"));
+    }
     let (png, w, h) = render_png(&st.doc, i, f64_or(p, "scale", 1.0), bool_or(p, "edit", false));
     Ok(json!({"png": base64_encode(&png), "width": w, "height": h}))
 }
@@ -228,6 +245,9 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let format = str_param(p, "format").unwrap_or(format_for_path(&path)).to_string();
     let st = s.doc()?;
     let scale = f64_or(p, "scale", 2.0);
+    if st.doc.has_planned_pages() {
+        return Err(bad("file.export", "存在未展开计划页，请保存 .deckcraft。"));
+    }
     match format.as_str() {
         "png" | "jpeg" | "jpg" => {
             let slides: Vec<usize> = match usize_param(p, "slide") {

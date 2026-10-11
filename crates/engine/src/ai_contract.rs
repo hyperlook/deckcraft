@@ -139,6 +139,27 @@ pub fn validate_context(draft: &ContextDraft) -> ContractResult<()> {
     Ok(())
 }
 
+/// Complete, ordered evidence and concise semantic intent must never be interchangeable.
+pub fn validate_summary(review: &deckcraft_model::SummaryReview) -> ContractResult<()> {
+    use deckcraft_model::ContextDiagnostic as D;
+    validate_context(&review.evidence)?;
+    if review.version != 1
+        || !review.summary.validate()
+        || review.summary.pages.len() != review.evidence.pages.len()
+        || review.evidence.diagnostics.contains(&D::Limit)
+        || review.evidence.pages.iter().any(|p| p.diagnostics.contains(&D::Limit))
+        || !review
+            .summary
+            .pages
+            .iter()
+            .zip(&review.evidence.pages)
+            .all(|(intent, source)| intent.page_id == source.page_id && (!source.sources.is_empty() || intent.unknown))
+    {
+        return Err(ContractError::Schema);
+    }
+    Ok(())
+}
+
 fn validate_outline_page(page: &OutlinePage) -> ContractResult<()> {
     if page.page_id.is_some_and(|id| id.0 == 0) {
         return Err(ContractError::Schema);
