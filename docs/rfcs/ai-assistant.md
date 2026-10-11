@@ -1,6 +1,6 @@
 # AI 助手：原文依据、大纲与页面文案
 
-状态：修订后的产品约定，待实现。总追踪 [#10](https://github.com/hyperlook/deckcraft/issues/10)，上下文重建 [#20](https://github.com/hyperlook/deckcraft/issues/20)，最小模型入口与单页改写 [#15](https://github.com/hyperlook/deckcraft/issues/15)。架构与交付顺序见 [ai-assistant-architecture.md](ai-assistant-architecture.md)。
+状态：修订后的产品约定；#15 A 最小模型入口已有 [真实连接/桌面检查点](../ai-a-review.md)，等待人工验收。全稿归纳与单页改写仍待实现。总追踪 [#10](https://github.com/hyperlook/deckcraft/issues/10)，上下文重建 [#20](https://github.com/hyperlook/deckcraft/issues/20)，最小模型入口与单页改写 [#15](https://github.com/hyperlook/deckcraft/issues/15)。架构与交付顺序见 [ai-assistant-architecture.md](ai-assistant-architecture.md)。
 
 原 #13 的离线提取实现已封存在 `checkpoint/ai-context-extraction`，代码检查点 `7ae7951`。提取、来源、诊断、草稿与原生保存可复用；“摘录确认成大纲”未通过产品验收。当前代码尚未符合下列新语义，不能将计划描述为已有能力。
 

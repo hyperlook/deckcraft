@@ -12,6 +12,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+mod ai_host;
 mod audio;
 mod control_server;
 #[cfg(any(target_os = "windows", test))]
@@ -110,6 +111,7 @@ fn services() -> Services {
             d.pick_file().map(|p| p.to_string_lossy().to_string())
         })),
         pick_material: Some(Box::new(material::pick)),
+        ai: Some(Box::new(ai_host::PiHost::default())),
         pick_save: Some(Box::new(|name: &str| rfd::FileDialog::new().set_file_name(name).save_file().map(|p| p.to_string_lossy().to_string()))),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),

@@ -1,8 +1,8 @@
 # 内置 AI 助手：先接通模型，再归纳全稿
 
-状态：产品修订后的实施计划，不是完成报告。总追踪：[#10](https://github.com/hyperlook/deckcraft/issues/10)。产品约定见 [ai-assistant.md](ai-assistant.md)。
+状态：产品修订后的实施计划，不是完整完成报告。#15 A 在 `feat/ai-minimal-entry` 已形成真实连接与桌面候选检查点，等待人工验收，见 [A 检查点](../ai-a-review.md)。#20 / #15 B 仍待实施。总追踪：[#10](https://github.com/hyperlook/deckcraft/issues/10)。产品约定见 [ai-assistant.md](ai-assistant.md)。
 
-工程检查点：`checkpoint/ai-context-extraction`，代码提交 `7ae7951`，基于 `main@0661aa2`。只读提取、来源定位、诊断、素材入口、命令写入和原生保存已封存，未合入 main。真实模型、全稿归纳和新版大纲语义尚未实现。产品反馈与实际封存验证见 [ai-p1-review.md](../ai-p1-review.md)。
+工程检查点：`checkpoint/ai-context-extraction`，代码提交 `7ae7951`，基于 `main@0661aa2`。只读提取、来源定位、诊断、素材入口、命令写入和原生保存已封存，未合入 main。该封存基线未实现真实模型、全稿归纳和新版大纲语义；后续 A 仅接通模型入口，不代表全稿归纳已完成。产品反馈与实际封存验证见 [ai-p1-review.md](../ai-p1-review.md)。
 
 ## 1. 为什么修改旧计划
 
@@ -175,7 +175,7 @@ flowchart TD
 | Issue | 当前定位 |
 |---|---|
 | #13 | 离线提取检查点与历史记录；保持 open，不冒称旧大纲验收完成 |
-| #15 A | 下一项开发：最小真实模型入口，不依赖旧 #13 验收 |
+| #15 A | 已有真实连接/桌面入口检查点，等待人工验收；不依赖旧 #13 验收 |
 | #20 | 全稿归纳、三个对象分离、确认与项目保存；依赖 #15 A 可用 |
 | #15 B | 基于 #20 结果真实改一页；A/B 全部验收后再关闭 #15 |
 | #12 | 新建大纲、页面文案、原生预览与项目保存；改页验收后推进 |

@@ -1,4 +1,4 @@
-//! The context for one AI round: the agreed outline, the cited page, the comment, and the materials.
+//! AI content contracts: round context plus the tool-free model-entry request lifecycle.
 //!
 //! This crate does not call a model, write the deck, or schedule work. The host shows the returned
 //! proposal and, if the user accepts it, commits it through the engine.
@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 mod context;
+pub mod request;
 mod round;
 pub use context::{extract_context, review_existing};
 

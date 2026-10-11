@@ -1,0 +1,4 @@
+# Explicit trusted config: no project preloads and no runtime installation.
+preload = []
+[install]
+auto = "disable"

@@ -6,6 +6,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+mod ai_pilot;
 mod assistant;
 pub mod canvas;
 pub mod control;
@@ -49,6 +50,8 @@ pub struct Services {
     /// Open-file dialog for a purpose (`open`, `picture`, `audio`, `video`) → path.
     pub pick_open: Option<PickFn>,
     pub pick_material: Option<PickMaterialFn>,
+    /// Optional, tool-free model service. No local adapter is supplied by Web.
+    pub ai: Option<Box<dyn deckcraft_ai::request::Host>>,
     /// Save dialog with a suggested name → path.
     pub pick_save: Option<PickFn>,
     pub read: Option<ReadFn>,
@@ -133,6 +136,9 @@ impl Default for UiState {
 
 /// UI-only commands (id, label, shortcut, params).
 pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
+    ("ai.loadModels", "AI: Load Pi Models", None, "{}"),
+    ("ai.sendMaterial", "AI: Send Authorized Material", None, "{}"),
+    ("ai.cancelRequest", "AI: Cancel Request", None, "{}"),
     ("view.normal", "Normal", None, "{}"),
     ("view.outline", "Outline View", None, "{}"),
     ("view.sorter", "Slide Sorter", None, "{}"),
@@ -176,6 +182,7 @@ pub struct Perf {
 
 pub struct SlideApp {
     pub(crate) assistant: assistant::Assistant,
+    pub(crate) ai_pilot: ai_pilot::Pilot,
     pub session: Session,
     pub services: Services,
     pub ui: UiState,
@@ -221,6 +228,7 @@ impl SlideApp {
         let audio_out = services.audio_out.take();
         SlideApp {
             assistant: assistant::Assistant::default(),
+            ai_pilot: ai_pilot::Pilot::default(),
             session,
             services,
             ui: UiState::default(),
@@ -292,6 +300,7 @@ impl SlideApp {
 
     fn run_ui(&mut self, id: &str, p: &Value) -> Result<Value, String> {
         match id {
+            "ai.loadModels" | "ai.sendMaterial" | "ai.cancelRequest" => return ai_pilot::action(self, id),
             "view.normal" => self.ui.view = ViewMode::Normal,
             "view.outline" => self.ui.view = ViewMode::Outline,
             "view.sorter" => self.ui.view = ViewMode::Sorter,
@@ -696,6 +705,7 @@ impl SlideApp {
         let t0 = now_ms();
         let t = theme::Tokens::get(&ctx);
         self.tick_media(&ctx);
+        ai_pilot::tick(self, &ctx);
         if self.show.is_some() {
             show::ui(self, ui);
             self.perf.frame_ms = now_ms() - t0;

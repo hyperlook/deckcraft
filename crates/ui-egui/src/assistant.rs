@@ -14,6 +14,12 @@ struct Editor {
 }
 
 pub fn show(app: &mut SlideApp, ui: &mut egui::Ui) {
+    crate::ai_pilot::show(app, ui);
+    ui.separator();
+    ui.collapsing("历史离线提取检查点（摘录 ≠ 大纲；未通过产品验收）", |ui| show_offline(app, ui));
+}
+
+fn show_offline(app: &mut SlideApp, ui: &mut egui::Ui) {
     let Some(state) = app.session.active() else {
         ui.label("请先打开自己的 PPTX 或原生文稿。");
         return;
@@ -251,7 +257,7 @@ mod tests {
     }
 
     fn harness(app: SlideApp) -> egui_kittest::Harness<'static, SlideApp> {
-        egui_kittest::Harness::builder().with_size(egui::vec2(650.0, 1600.0)).build_ui_state(|ui, app: &mut SlideApp| show(app, ui), app)
+        egui_kittest::Harness::builder().with_size(egui::vec2(650.0, 1600.0)).build_ui_state(|ui, app: &mut SlideApp| show_offline(app, ui), app)
     }
 
     #[test]

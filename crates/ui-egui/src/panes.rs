@@ -27,7 +27,7 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
                 "selection" => "Selection",
                 "comments" => "Comments",
                 "designer" => "Design Ideas",
-                "ai" => "AI · 大纲上下文",
+                "ai" => "AI · 模型连接",
                 _ => "Pane",
             };
             ui.horizontal(|ui| {
