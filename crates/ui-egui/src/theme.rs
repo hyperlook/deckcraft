@@ -174,6 +174,24 @@ pub fn install_fonts(ctx: &egui::Context) {
             list.insert(k, n.clone());
         }
     }
+    // Review labels and user-entered outlines must remain readable without craft-fonts.
+    // Reuse the font database's native system fallback (on WASM only embedded faces exist).
+    let db = deckcraft_fonts::FontDb::global();
+    let cjk = ["Arial Unicode MS", "Noto Sans CJK SC", "Microsoft YaHei", "WenQuanYi Micro Hei"]
+        .iter()
+        .filter(|name| db.has_family(name))
+        .map(|name| db.face(name, "Regular"))
+        .find(|face| face.covers('纲') && face.data().len() <= 40 << 20)
+        .or_else(|| db.fallback_for('纲', 0).filter(|face| face.data().len() <= 40 << 20));
+    if let Some(face) = cjk {
+        let name = "ui-cjk-fallback".to_string();
+        let mut data = FontData::from_owned(face.data().to_vec());
+        data.index = face.index();
+        defs.font_data.insert(name.clone(), std::sync::Arc::new(data));
+        if let Some(list) = defs.families.get_mut(&FontFamily::Proportional) {
+            list.push(name);
+        }
+    }
     // A bold family for headings and selected tabs.
     let mut bold: Vec<String> = names.iter().filter(|(fam, st, _)| *fam == "Inter" && *st == "SemiBold").map(|(_, _, n)| n.clone()).collect();
     bold.extend(defs.families.get(&FontFamily::Proportional).cloned().unwrap_or_default());

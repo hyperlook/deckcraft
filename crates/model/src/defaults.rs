@@ -513,6 +513,8 @@ pub fn blank_presentation(size: Size, theme: Theme, title_slide: bool) -> Presen
         embedded_fonts: vec![],
         outline: crate::Outline::default(),
         materials: vec![],
+        context_draft: None,
+        confirmed_context: None,
         raw_ext: None,
     };
     if title_slide {

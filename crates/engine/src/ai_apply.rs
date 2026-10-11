@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use deckcraft_model::text::{Paragraph, Run, TextBody};
-use deckcraft_model::{Material, Outline, PhType, Presentation, Shape, ShapeKind, SlideId};
+use deckcraft_model::{ContextDraft, Material, Outline, PhType, Presentation, Shape, ShapeKind, SlideId};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -79,9 +79,45 @@ impl Session {
 
     /// Store the outline the user edited. This does not add, delete, or reorder slides.
     pub fn set_outline(&mut self, doc_uid: u64, outline: Outline) -> Result<StoreOutcome, ApplyError> {
+        self.set_outline_review(doc_uid, outline, None)
+    }
+
+    /// Explicit confirmation atomically installs facts, provenance and materials in one undo step.
+    pub fn set_outline_review(&mut self, doc_uid: u64, outline: Outline, review: Option<ContextDraft>) -> Result<StoreOutcome, ApplyError> {
         crate::ai_contract::validate_outline(&outline)?;
-        self.guarded_edit("ai.setOutline", doc_uid, "AI: 修改大纲".into(), move |doc| {
+        if let Some(context) = &review {
+            crate::ai_contract::validate_context(context)?;
+            if context.outline() != outline {
+                return Err(ApplyError::Contract(ContractError::Schema));
+            }
+        }
+        self.guarded_edit("ai.setOutline", doc_uid, "AI: 确认大纲上下文".into(), move |doc| {
+            for page in &outline.pages {
+                if page.page_id.is_some_and(|id| doc.slide(id).is_none()) {
+                    return Err(ApplyError::PageGone);
+                }
+            }
+            if let Some(context) = &review {
+                if context.pages.iter().any(|p| doc.slide(p.page_id).is_none()) {
+                    return Err(ApplyError::PageGone);
+                }
+                doc.materials = context.materials.clone();
+                doc.context_draft = None;
+            }
             doc.outline = outline;
+            doc.confirmed_context = review;
+            Ok(())
+        })
+        .map(|changed| StoreOutcome { doc_uid, changed })
+    }
+
+    /// Saving or clearing an unconfirmed draft never replaces the agreed facts or slides.
+    pub fn set_context_draft(&mut self, doc_uid: u64, draft: Option<ContextDraft>) -> Result<StoreOutcome, ApplyError> {
+        if let Some(draft) = &draft {
+            crate::ai_contract::validate_context(draft)?;
+        }
+        self.guarded_edit("ai.setDraft", doc_uid, "AI: 暂存未确认草稿".into(), move |doc| {
+            doc.context_draft = draft;
             Ok(())
         })
         .map(|changed| StoreOutcome { doc_uid, changed })
@@ -271,6 +307,9 @@ fn clamp_text_caret(selection: &mut Selection, doc: &Presentation) {
     }
 }
 
+#[cfg(test)]
+#[path = "context_tests.rs"]
+mod context_tests;
 #[cfg(test)]
 #[path = "ai_apply_tests.rs"]
 mod tests;

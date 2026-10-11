@@ -3,7 +3,7 @@
 //! Nothing here writes the deck. Accepting a proposal is [`crate::ai_apply`]. The old text-box
 //! patch, paragraph-count lock, content-revision conflict, and template-append protocol are gone.
 
-use deckcraft_model::{Material, Outline, OutlinePage, SlideId};
+use deckcraft_model::{ContextDraft, Material, Outline, OutlinePage, SlideId};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_OUTLINE_PAGES: usize = 64;
@@ -22,6 +22,8 @@ pub enum ContractError {
     Schema,
     #[error("limit exceeded: {0}")]
     Limit(&'static str),
+    #[error("the target page needs confirmed context first")]
+    MissingContext,
     #[error("duplicate outline page")]
     DuplicatePage,
     #[error("duplicate material name")]
@@ -97,6 +99,42 @@ pub fn validate_materials(materials: &[Material]) -> ContractResult<()> {
             return Err(ContractError::DuplicateMaterial);
         }
         seen.push(material.name.clone());
+    }
+    Ok(())
+}
+
+/// Persistence has the same bounds as facts, with separately bounded provenance.
+pub fn validate_context(draft: &ContextDraft) -> ContractResult<()> {
+    if draft.pages.len() > MAX_OUTLINE_PAGES || draft.diagnostics.len() > 16 {
+        return Err(ContractError::Limit("context pages / diagnostics"));
+    }
+    validate_materials(&draft.materials)?;
+    let mut seen = Vec::new();
+    for page in &draft.pages {
+        if page.page_id.0 == 0 || seen.contains(&page.page_id) {
+            return Err(ContractError::DuplicatePage);
+        }
+        seen.push(page.page_id);
+        plain_line(&page.title, MAX_TITLE_CHARS, "title")?;
+        if page.points.len() > MAX_POINTS {
+            return Err(ContractError::Limit("points"));
+        }
+        for point in &page.points {
+            plain_line(point, MAX_POINT_CHARS, "point")?;
+        }
+        if !page.unknown && page.title.trim().is_empty() {
+            return Err(ContractError::Schema);
+        }
+        if page.sources.len() > 64 || page.diagnostics.len() > 16 {
+            return Err(ContractError::Limit("context sources / diagnostics"));
+        }
+        for source in &page.sources {
+            if source.shape_path.is_empty() || source.shape_path.len() > 16 || source.shape_path.iter().any(|id| id.0 == 0) || source.paragraph > 4096
+            {
+                return Err(ContractError::Schema);
+            }
+            plain_line(&source.text, MAX_POINT_CHARS, "source")?;
+        }
     }
     Ok(())
 }

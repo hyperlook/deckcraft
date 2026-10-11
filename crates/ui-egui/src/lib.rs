@@ -6,6 +6,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+mod assistant;
 pub mod canvas;
 pub mod control;
 pub mod credits;
@@ -32,6 +33,8 @@ use serde_json::{Value, json};
 
 pub use control::{ControlRequest, ControlResponse};
 
+/// Host-selected, bounded UTF-8 text. Only basename/body cross into the review UI.
+pub type PickMaterialFn = Box<dyn FnMut() -> Result<Option<(String, String)>, String>>;
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 pub type PickFn = Box<dyn FnMut(&str) -> Option<String>>;
@@ -45,6 +48,7 @@ pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
 pub struct Services {
     /// Open-file dialog for a purpose (`open`, `picture`, `audio`, `video`) → path.
     pub pick_open: Option<PickFn>,
+    pub pick_material: Option<PickMaterialFn>,
     /// Save dialog with a suggested name → path.
     pub pick_save: Option<PickFn>,
     pub read: Option<ReadFn>,
@@ -142,7 +146,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("view.zoomOut", "Zoom Out", Some("Cmd+-"), "{}"),
     ("view.zoom", "Zoom…", None, "{percent}"),
     ("view.fit", "Fit to Window", None, "{}"),
-    ("view.pane", "Task Pane", None, "{pane: format|animation|selection|comments|designer|background|null}"),
+    ("view.pane", "Task Pane", None, "{pane: format|animation|selection|comments|designer|background|ai|null}"),
     ("view.tab", "Ribbon Tab", None, "{tab}"),
     ("view.collapseRibbon", "Collapse the Ribbon", Some("Cmd+F1"), "{}"),
     ("view.dark", "Dark Mode", None, "{on?: bool}"),
@@ -171,6 +175,7 @@ pub struct Perf {
 }
 
 pub struct SlideApp {
+    pub(crate) assistant: assistant::Assistant,
     pub session: Session,
     pub services: Services,
     pub ui: UiState,
@@ -215,6 +220,7 @@ impl SlideApp {
     pub fn new(session: Session, mut services: Services) -> Self {
         let audio_out = services.audio_out.take();
         SlideApp {
+            assistant: assistant::Assistant::default(),
             session,
             services,
             ui: UiState::default(),

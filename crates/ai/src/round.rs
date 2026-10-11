@@ -1,7 +1,7 @@
 //! Assemble the only context a model is allowed to see for one round.
 
 use deckcraft_engine::ai_contract::{self, ContractError, ContractResult, PageProposal};
-use deckcraft_model::{Material, Outline, SlideId};
+use deckcraft_model::{Material, Outline, Presentation, SlideId};
 use serde::Serialize;
 
 /// Told to the model with every round. Facts come from the outline and the materials.
@@ -39,6 +39,19 @@ impl Round {
         ai_contract::validate_outline(&outline)?;
         ai_contract::validate_materials(&materials)?;
         Ok(Self { doc_uid, page_id, comment, outline, materials })
+    }
+
+    /// P1 readiness boundary: only saved facts, never the unconfirmed draft or live slide text.
+    pub fn from_confirmed(doc_uid: u64, page_id: SlideId, comment: impl Into<String>, doc: &Presentation) -> ContractResult<Self> {
+        ai_contract::validate_outline(&doc.outline)?;
+        ai_contract::validate_materials(&doc.materials)?;
+        if doc.slide(page_id).is_none() {
+            return Err(ContractError::Schema);
+        }
+        if !doc.outline.pages.iter().any(|p| p.page_id == Some(page_id) && !p.title.trim().is_empty()) {
+            return Err(ContractError::MissingContext);
+        }
+        Self::assemble(doc_uid, page_id, comment, doc.outline.clone(), doc.materials.clone())
     }
 
     pub fn brief(&self) -> ModelBrief {
@@ -99,6 +112,27 @@ mod tests {
         let proposal = round().proposal("新主张", vec!["先验证场景".into()]).unwrap();
         assert_eq!(proposal.points.len(), 1);
         assert_eq!(proposal.page_id, SlideId(12));
+    }
+
+    #[test]
+    fn drafts_and_live_text_are_not_target_facts() {
+        let mut doc = Presentation::default();
+        let page = doc.slides[0].id;
+        doc.context_draft = Some(deckcraft_model::ContextDraft {
+            pages: vec![deckcraft_model::ContextPage {
+                page_id: page,
+                title: "草稿不是事实".into(),
+                points: vec![],
+                unknown: false,
+                sources: vec![],
+                diagnostics: vec![],
+            }],
+            ..Default::default()
+        });
+        assert_eq!(Round::from_confirmed(1, page, "", &doc), Err(ContractError::MissingContext));
+        doc.outline.upsert(page, "已确认".into(), vec![]);
+        let r = Round::from_confirmed(1, page, "", &doc).unwrap();
+        assert_eq!(r.brief().outline.pages[0].title, "已确认");
     }
 
     #[test]

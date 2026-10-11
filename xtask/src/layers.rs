@@ -72,7 +72,7 @@ pub const TABLE: &[(&str, Class)] = &[
 pub const DEV_EXCEPTIONS: &[(&str, &str)] = &[("pptx", "engine")];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
-pub const INTRA_LAYER_ORDER: &[&[&str]] = &[];
+pub const INTRA_LAYER_ORDER: &[&[&str]] = &[&["ai", "ui-egui"]];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {
     let (from, to) = (short_name(from), short_name(to));
@@ -269,6 +269,14 @@ mod tests {
     fn upward_dependency_flagged() {
         let v = check(&[c("deckcraft-model", &[("deckcraft-engine", Normal, true)])]);
         assert!(matches!(v[..], [Violation::Upward { from: 1, to: 5, .. }]));
+    }
+
+    #[test]
+    fn only_the_context_ui_sideways_edge_is_allowed() {
+        assert!(check(&[c("deckcraft-ui-egui", &[("deckcraft-ai", Normal, true)])]).is_empty());
+        for (from, to) in [("ai", "ui-egui"), ("mcp", "ai"), ("ui-egui", "mcp"), ("mcp", "ui-egui")] {
+            assert!(!check(&[c(from, &[(to, Normal, true)])]).is_empty());
+        }
     }
 
     #[test]

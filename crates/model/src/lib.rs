@@ -9,6 +9,7 @@
 
 pub mod anim;
 pub mod chart;
+pub mod context;
 pub mod defaults;
 pub mod edit;
 pub mod resolve;
@@ -26,6 +27,7 @@ use serde::{Deserialize, Serialize};
 
 pub use anim::{AnimClass, AnimStart, Animation, Transition};
 pub use chart::Chart;
+pub use context::{ContextDiagnostic, ContextDraft, ContextPage, ContextSource};
 pub use story::{Material, MaterialKind, Outline, OutlinePage};
 pub use style::{ColorBase, ColorRef, Effects, Fill, Line, ShapeStyle};
 pub use table::{Cell, Table};
@@ -786,6 +788,12 @@ pub struct Presentation {
     /// Notes, extracted file text, and image captions used as facts for this deck.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub materials: Vec<Material>,
+    /// Unconfirmed working copy, never used as AI facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_draft: Option<ContextDraft>,
+    /// Provenance and coverage at the last explicit confirmation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed_context: Option<ContextDraft>,
     /// Unmodelled presentation-level XML kept for round-trip.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_ext: Option<String>,

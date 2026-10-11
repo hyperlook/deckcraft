@@ -231,6 +231,41 @@ mod tests {
     }
 
     #[test]
+    fn review_metadata_roundtrips_without_promoting_the_draft() {
+        use deckcraft_model::{ContextDraft, ContextPage, Material, MaterialKind};
+        let mut p = Presentation::default();
+        let page = p.slides[0].id;
+        p.outline.upsert(page, "Agreed".into(), vec!["Fact".into()]);
+        let draft = ContextDraft {
+            pages: vec![ContextPage {
+                page_id: page,
+                title: "Unconfirmed".into(),
+                points: vec![],
+                unknown: false,
+                sources: vec![],
+                diagnostics: vec![],
+            }],
+            materials: vec![Material { name: "note".into(), kind: MaterialKind::Text, body: "private draft".into() }],
+            diagnostics: vec![],
+        };
+        p.context_draft = Some(draft.clone());
+        let restored = load(&save(&p).unwrap()).unwrap();
+        assert_eq!(restored.context_draft, Some(draft));
+        assert_eq!(restored.outline.pages[0].title, "Agreed");
+        assert!(restored.materials.is_empty());
+    }
+
+    #[test]
+    fn older_native_files_have_no_review_state() {
+        let p = Presentation::default();
+        let value = serde_json::to_value(&p).unwrap();
+        assert!(value.get("contextDraft").is_none());
+        assert!(value.get("confirmedContext").is_none());
+        let restored = load(&save(&p).unwrap()).unwrap();
+        assert!(restored.context_draft.is_none() && restored.confirmed_context.is_none());
+    }
+
+    #[test]
     fn garbage_is_an_error_not_a_panic() {
         assert!(load(b"").is_err());
         assert!(load(b"PK\x03\x04garbage").is_err());

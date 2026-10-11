@@ -27,6 +27,7 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
                 "selection" => "Selection",
                 "comments" => "Comments",
                 "designer" => "Design Ideas",
+                "ai" => "AI · 大纲上下文",
                 _ => "Pane",
             };
             ui.horizontal(|ui| {
@@ -50,6 +51,7 @@ pub fn show(app: &mut SlideApp, ui: &mut Ui) {
                 "selection" => selection(app, ui),
                 "comments" => comments(app, ui),
                 "designer" => designer(app, ui),
+                "ai" => crate::assistant::show(app, ui),
                 _ => {}
             });
         });
